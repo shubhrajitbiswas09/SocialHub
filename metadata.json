@@ -1,0 +1,8 @@
+{
+  "name": "Remix: power 1 : SocialHub",
+  "description": "A social monetization hub combining Instagram-style creator feeds with integrated, secure Razorpay-style in-app payments (with coming soon tag), subscription tiers, and encrypted chat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
