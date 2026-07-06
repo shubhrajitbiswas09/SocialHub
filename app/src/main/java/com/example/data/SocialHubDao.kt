@@ -62,10 +62,13 @@ interface SocialHubDao {
     fun getAllChatMessages(): Flow<List<ChatMessage>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertChatMessage(message: ChatMessage)
+    suspend fun insertChatMessage(message: ChatMessage): Long
 
     @Update
     suspend fun updateChatMessage(message: ChatMessage)
+
+    @Delete
+    suspend fun deleteChatMessage(message: ChatMessage)
 
     @Query("UPDATE chat_messages SET isSeen = 1 WHERE senderName = :senderName AND receiverName = 'You' AND isSeen = 0")
     suspend fun markMessagesAsSeenForSender(senderName: String)

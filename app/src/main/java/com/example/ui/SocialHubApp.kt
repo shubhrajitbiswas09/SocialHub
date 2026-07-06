@@ -833,7 +833,9 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                 onPayInvoice = { chat -> viewModel.payChatInvoice(chat) },
                                 onDeclineInvoice = { chat -> viewModel.declineChatInvoice(chat) },
                                 onMarkAsSeen = { viewModel.markMessagesAsSeen(it) },
-                                initialRecipient = target.initialRecipient
+                                initialRecipient = target.initialRecipient,
+                                onDeleteMessageForMe = { viewModel.deleteMessageForMe(it) },
+                                onDeleteMessageForEveryone = { viewModel.deleteMessageForEveryone(it) }
                             )
                             is Screen.Wallet -> WalletScreen(
                                 balance = walletBalance,
@@ -2003,7 +2005,7 @@ fun NewPostDialog(
         var simFileSizeMB by remember { mutableStateOf("3.5") }
 
         // --- NEW INSTAGRAM-STYLE & ADVANCED FEATURES STATES ---
-        var activeTab by remember { mutableStateOf("poster") } // "poster" or "media"
+        var activeTab by remember { mutableStateOf("media") } // Only media tab is active
         var selectedFilter by remember { mutableStateOf("Normal") }
         var selectedLocation by remember { mutableStateOf("") }
         var selectedMusic by remember { mutableStateOf("") }
@@ -2325,70 +2327,13 @@ fun NewPostDialog(
                         )
                     }
 
-                    // TAB CONTROLS (Poster Generator vs Media Capture)
-                    Row(
-                        modifier = Modifier
-                            .background(Color.Black.copy(alpha = 0.4f), RoundedCornerShape(20.dp))
-                            .padding(2.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(if (activeTab == "poster") RazorTeal else Color.Transparent)
-                                .clickable { activeTab = "poster" }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                "Poster Design 🖼️",
-                                color = if (activeTab == "poster") Color.Black else Color.White.copy(alpha = 0.7f),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(18.dp))
-                                .background(if (activeTab == "media") RazorTeal else Color.Transparent)
-                                .clickable { activeTab = "media" }
-                                .padding(horizontal = 12.dp, vertical = 6.dp)
-                        ) {
-                            Text(
-                                "Library / Hardware 📸",
-                                color = if (activeTab == "media") Color.Black else Color.White.copy(alpha = 0.7f),
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+
 
                     // Share Button (Publish Action)
                     Button(
                         onClick = {
-                            val mergedCaption = buildString {
-                                append(captionText.ifBlank { "Uncaptioned creative drop from Creator Hub ✨" })
-                                if (selectedLocation.isNotBlank()) {
-                                    append("\n\n📍 Location: $selectedLocation")
-                                }
-                                if (selectedMusic.isNotBlank()) {
-                                    append("\n\n🎵 Music track: $selectedMusic")
-                                }
-                                if (taggedCreators.isNotEmpty()) {
-                                    append("\n\n🏷️ Tagged Creators: ")
-                                    append(taggedCreators.joinToString(", ") { "@${it.handle}" })
-                                }
-                                if (selectedVisibilityTier != "Everyone") {
-                                    append("\n\n🔒 Gated: $selectedVisibilityTier Subscribers Only")
-                                }
-                            }
-                            
-                            val resolvedContentMedia = if (activeTab == "poster") {
-                                posterThemeImages[selectedPosterTheme] ?: "https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=800"
-                            } else {
-                                realAttachedUri?.toString() ?: attachedMediaType ?: "attached_image"
-                            }
-
-                            onPublish(mergedCaption, selectedCreator, resolvedContentMedia)
+                            val resolvedContentMedia = realAttachedUri?.toString() ?: attachedMediaType ?: "attached_image"
+                            onPublish(captionText.ifBlank { "Uncaptioned creative drop from Creator Hub ✨" }, selectedCreator, resolvedContentMedia)
                             onDismiss()
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -2937,411 +2882,9 @@ fun NewPostDialog(
                         }
                     }
 
-                    // 6. INSTAGRAM-STYLE OPTIONS LIST (Tags, Location, Music, Visibility)
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF16112C))
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Tag People Option
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showTagSelector = !showTagSelector },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Person, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Tag People", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (taggedCreators.isNotEmpty()) {
-                                    Text("${taggedCreators.size} tagged", color = RazorTeal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Text("None", color = GrayText, fontSize = 11.sp)
-                                }
-                                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = GrayText, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                        
-                        // Tag people selector list (Expanded checklist)
-                        if (showTagSelector) {
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.3f)),
-                                border = BorderStroke(1.dp, RazorTeal.copy(alpha = 0.15f))
-                            ) {
-                                Column(modifier = Modifier.padding(8.dp)) {
-                                    Text("SELECT CREATORS TO TAG", color = RazorBlue, fontSize = 8.5.sp, fontWeight = FontWeight.Black)
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        items(creators) { creator ->
-                                            val isTagged = taggedCreators.any { it.id == creator.id }
-                                            Box(
-                                                modifier = Modifier
-                                                    .clip(RoundedCornerShape(8.dp))
-                                                    .background(if (isTagged) RazorTeal else Color(0xFF1B1437))
-                                                    .clickable {
-                                                        taggedCreators = if (isTagged) {
-                                                            taggedCreators.filter { it.id != creator.id }
-                                                        } else {
-                                                            taggedCreators + creator
-                                                        }
-                                                    }
-                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                                            ) {
-                                                Text(
-                                                    text = "@${creator.handle}",
-                                                    color = if (isTagged) Color.Black else Color.White,
-                                                    fontSize = 10.sp,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
 
-                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
 
-                        // Add Location Option
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showLocationSelector = !showLocationSelector },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.LocationOn, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Add Location", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (selectedLocation.isNotBlank()) {
-                                    Text(selectedLocation, color = RazorTeal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Text("None", color = GrayText, fontSize = 11.sp)
-                                }
-                                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = GrayText, modifier = Modifier.size(16.dp))
-                            }
-                        }
 
-                        // Location suggestion chips
-                        if (showLocationSelector) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                locationSuggestions.forEach { loc ->
-                                    val isSelected = selectedLocation == loc
-                                    Box(
-                                        modifier = Modifier
-                                            .background(if (isSelected) RazorTeal else Color(0xFF1B1437), RoundedCornerShape(6.dp))
-                                            .clickable { selectedLocation = if (isSelected) "" else loc }
-                                            .padding(horizontal = 8.dp, vertical = 5.dp)
-                                    ) {
-                                        Text(loc, color = if (isSelected) Color.Black else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
-
-                        // Add Music Option
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { showMusicSelector = !showMusicSelector },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Add Music / Soundtrack", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (selectedMusic.isNotBlank()) {
-                                    Text(selectedMusic, color = RazorTeal, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Text("None", color = GrayText, fontSize = 11.sp)
-                                }
-                                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = GrayText, modifier = Modifier.size(16.dp))
-                            }
-                        }
-
-                        // Music selection chips
-                        if (showMusicSelector) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                soundtrackSuggestions.forEach { music ->
-                                    val isSelected = selectedMusic == music
-                                    Box(
-                                        modifier = Modifier
-                                            .background(if (isSelected) RazorTeal else Color(0xFF1B1437), RoundedCornerShape(6.dp))
-                                            .clickable { selectedMusic = if (isSelected) "" else music }
-                                            .padding(horizontal = 8.dp, vertical = 5.dp)
-                                    ) {
-                                        Text(music, color = if (isSelected) Color.Black else Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-                        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
-
-                        // Audience Tier Gating Option
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Audience Gating", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                            }
-                            
-                            // Horizontal Row of Visibility Tiers
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                listOf("Everyone", "Bronze+", "Silver+", "Gold+").forEach { tier ->
-                                    val isSelected = selectedVisibilityTier == tier
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(if (isSelected) RazorTeal else Color.Black.copy(alpha = 0.3f))
-                                            .border(1.dp, if (isSelected) RazorTeal else Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp))
-                                            .clickable { selectedVisibilityTier = tier }
-                                            .padding(horizontal = 6.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = tier,
-                                            color = if (isSelected) Color.Black else Color.White,
-                                            fontSize = 9.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // 7. EXPANDABLE DIAGNOSTICS & TELEMETRY PLATFORM PLAYGROUND (Closed by default)
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF16112C)),
-                        border = BorderStroke(1.2.dp, RazorBlue.copy(alpha = 0.2f))
-                    ) {
-                        Column {
-                            // Expand/Collapse Row
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { isPlaygroundExpanded = !isPlaygroundExpanded }
-                                    .padding(12.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("🔌 HARDWARE CAPTURE & TELEMETRY PANEL", color = RazorBlue, fontSize = 10.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                                }
-                                Icon(
-                                    imageVector = if (isPlaygroundExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown,
-                                    contentDescription = "Expand/Collapse",
-                                    tint = RazorBlue
-                                )
-                            }
-
-                            if (isPlaygroundExpanded) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Text(
-                                        text = "Saves bandwidth & prevents client bottlenecks by vetting size (Image: 5MB, Audio: 8MB, Video: 20MB) & file formats.",
-                                        fontSize = 10.sp,
-                                        color = GrayText
-                                    )
-
-                                    // Real Hardware Capture Buttons
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Button(
-                                            onClick = { tryAttach("camera") },
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (attachedMediaType == "attached_image" && requestedPermissionType == "camera") RazorTeal else Color(0xFF1F163D)),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("📸 Snap", fontSize = 10.sp, color = if (attachedMediaType == "attached_image" && requestedPermissionType == "camera") Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                        }
-
-                                        Button(
-                                            onClick = { tryAttach("mic") },
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (attachedMediaType == "attached_audio") RazorTeal else Color(0xFF1F163D)),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("🎙️ Mic", fontSize = 10.sp, color = if (attachedMediaType == "attached_audio") Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                        }
-
-                                        Button(
-                                            onClick = { tryAttach("video") },
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (attachedMediaType == "attached_video") RazorTeal else Color(0xFF1F163D)),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("📹 Video", fontSize = 10.sp, color = if (attachedMediaType == "attached_video") Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                        }
-
-                                        Button(
-                                            onClick = { tryAttach("media") },
-                                            colors = ButtonDefaults.buttonColors(containerColor = if (attachedMediaType == "attached_image" && requestedPermissionType == "media") RazorTeal else Color(0xFF1F163D)),
-                                            shape = RoundedCornerShape(8.dp),
-                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            Text("🖼️ Pick", fontSize = 10.sp, color = if (attachedMediaType == "attached_image" && requestedPermissionType == "media") Color.Black else Color.White, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-
-                                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.08f)))
-
-                                    // Simulated Playground Presets
-                                    Text("⚡ SANDBOX PRESET VALIDATOR", fontSize = 9.5.sp, color = RazorBlue, fontWeight = FontWeight.Black)
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        listOf(
-                                            Triple("image/png", "cyberpunk_shot.png", "🖼️ JPEG/PNG"),
-                                            Triple("video/mp4", "hype_vlog.mp4", "📹 Video"),
-                                            Triple("audio/wav", "voice_memo.wav", "🎙️ Audio"),
-                                            Triple("application/zip", "malicious.zip", "⚠️ ZIP (Block)")
-                                        ).forEach { (mimeType, dName, label) ->
-                                            val isSelected = simFileType == mimeType
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(if (isSelected) RazorBlue.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.3f))
-                                                    .border(1.dp, if (isSelected) RazorBlue else Color.Transparent, RoundedCornerShape(6.dp))
-                                                    .clickable {
-                                                        simFileType = mimeType
-                                                        simFileName = dName
-                                                    }
-                                                    .padding(vertical = 6.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(text = label, fontSize = 8.5.sp, fontWeight = FontWeight.Bold, color = if (isSelected) Color.White else GrayText)
-                                            }
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.SpaceBetween
-                                    ) {
-                                        Text("Simulate Size:", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            listOf("1.5", "4.8", "7.9", "12.0", "32.0").forEach { preset ->
-                                                val isSelectedPreset = simFileSizeMB == preset
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(4.dp))
-                                                        .background(if (isSelectedPreset) RazorTeal else Color.Black.copy(alpha = 0.2f))
-                                                        .border(1.dp, if (isSelectedPreset) RazorTeal else Color.White.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
-                                                        .clickable { simFileSizeMB = preset }
-                                                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                                                ) {
-                                                    Text(text = "$preset MB", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = if (isSelectedPreset) Color.Black else Color.White)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Button(
-                                        onClick = {
-                                            val parsedSizeMB = simFileSizeMB.toDoubleOrNull() ?: 3.5
-                                            val sizeBytes = (parsedSizeMB * 1024 * 1024).toLong()
-                                            val (isValid, errorMsg) = validateFile(simFileName, sizeBytes, simFileType)
-                                            
-                                            if (isValid) {
-                                                realAttachedUri = null
-                                                attachedFileName = simFileName
-                                                attachedFileSizeStr = "$parsedSizeMB MB"
-                                                attachedFileMimeType = simFileType
-                                                fileValidationErrorMessage = null
-                                                attachedMediaType = when {
-                                                    simFileType.startsWith("image/") -> "attached_image"
-                                                    simFileType.startsWith("video/") -> "attached_video"
-                                                    simFileType.startsWith("audio/") -> "attached_audio"
-                                                    else -> "attached_image"
-                                                }
-                                                permissionStatusMessage = "✅ Simulation: Verified $simFileName ($parsedSizeMB MB)"
-                                                activeTab = "media" // Auto switch to Media to view
-                                            } else {
-                                                fileValidationErrorMessage = errorMsg
-                                                permissionStatusMessage = "❌ Simulation Blocked: $errorMsg"
-                                                realAttachedUri = null
-                                                attachedFileName = null
-                                                attachedFileSizeStr = null
-                                                attachedFileMimeType = null
-                                                attachedMediaType = null
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = RazorBlue),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth().height(36.dp)
-                                    ) {
-                                        Text("🛡️ Validate & Apply Simulation", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 11.sp)
-                                    }
-
-                                    // Telemetry permission status banner
-                                    permissionStatusMessage?.let { status ->
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .clip(RoundedCornerShape(6.dp))
-                                                .background(Color.Black.copy(alpha = 0.5f))
-                                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = status,
-                                                color = if (status.startsWith("❌") || status.contains("Blocked") || status.contains("Failed")) Color(0xFFFF5555) else RazorTeal,
-                                                fontSize = 11.sp,
-                                                fontFamily = FontFamily.Monospace,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
         }
@@ -5232,54 +4775,7 @@ fun CreativeStudioDialog(onDismiss: () -> Unit, onPublish: (String, String?) -> 
                         }
                     }
 
-                    // Option 3: Curated Cyber Gallery
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp)
-                            .clickable { currentStep = 1 },
-                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.04f)),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.2.dp, InstaPink.copy(0.3f))
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(18.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(CircleShape)
-                                    .background(InstaPink.copy(0.12f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PhotoLibrary,
-                                    contentDescription = "Cyber Gallery",
-                                    tint = InstaPink,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(16.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "In-App Cyber Curator",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
-                                )
-                                Text(
-                                    text = "Browse beautiful pre-configured cyberpunk visual feeds",
-                                    color = Color.White.copy(0.6f),
-                                    fontSize = 11.sp,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
-                            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = InstaPink, modifier = Modifier.size(20.dp))
-                        }
-                    }
+
                 }
             }
         } else if (currentStep == 1) {
@@ -6945,13 +6441,149 @@ fun ChatScreen(
     onPayInvoice: (ChatMessage) -> Unit,
     onDeclineInvoice: (ChatMessage) -> Unit,
     onMarkAsSeen: (String) -> Unit,
-    initialRecipient: String? = null
+    initialRecipient: String? = null,
+    onDeleteMessageForMe: (ChatMessage) -> Unit = {},
+    onDeleteMessageForEveryone: (ChatMessage) -> Unit = {}
 ) {
     var activeThreadRecipient by remember(initialRecipient) { mutableStateOf<String?>(initialRecipient) }
     var inputMessage by remember { mutableStateOf("") }
-    var settleUpStatePaid by remember { mutableStateOf(false) }
     var chatSearchQuery by remember { mutableStateOf("") }
     var selectedCategoryTab by remember { mutableStateOf("All") } // "All", "Creators", "Followers"
+    var showAttachmentDialog by remember { mutableStateOf(false) }
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val documentPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            var fileName: String? = null
+            if (it.scheme == "content") {
+                val cursor = context.contentResolver.query(it, null, null, null, null)
+                try {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (index != -1) {
+                            fileName = cursor.getString(index)
+                        }
+                    }
+                } finally {
+                    cursor?.close()
+                }
+            }
+            if (fileName == null) {
+                fileName = it.path
+                val cut = fileName?.lastIndexOf('/') ?: -1
+                if (cut != -1) {
+                    fileName = fileName?.substring(cut + 1)
+                }
+            }
+            val finalName = fileName ?: "document.pdf"
+            onSendMessage(activeThreadRecipient ?: "", "📄 Document: $finalName")
+        }
+    }
+
+    val galleryPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            var fileName: String? = null
+            if (it.scheme == "content") {
+                val cursor = context.contentResolver.query(it, null, null, null, null)
+                try {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (index != -1) {
+                            fileName = cursor.getString(index)
+                        }
+                    }
+                } finally {
+                    cursor?.close()
+                }
+            }
+            if (fileName == null) {
+                fileName = it.path
+                val cut = fileName?.lastIndexOf('/') ?: -1
+                if (cut != -1) {
+                    fileName = fileName?.substring(cut + 1)
+                }
+            }
+            val finalName = fileName ?: "image.jpg"
+            onSendMessage(activeThreadRecipient ?: "", "🖼️ Image: $finalName")
+        }
+    }
+
+    val videoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            var fileName: String? = null
+            if (it.scheme == "content") {
+                val cursor = context.contentResolver.query(it, null, null, null, null)
+                try {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (index != -1) {
+                            fileName = cursor.getString(index)
+                        }
+                    }
+                } finally {
+                    cursor?.close()
+                }
+            }
+            if (fileName == null) {
+                fileName = it.path
+                val cut = fileName?.lastIndexOf('/') ?: -1
+                if (cut != -1) {
+                    fileName = fileName?.substring(cut + 1)
+                }
+            }
+            val finalName = fileName ?: "video.mp4"
+            onSendMessage(activeThreadRecipient ?: "", "🎥 Video: $finalName")
+        }
+    }
+
+    val audioPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: android.net.Uri? ->
+        uri?.let {
+            var fileName: String? = null
+            if (it.scheme == "content") {
+                val cursor = context.contentResolver.query(it, null, null, null, null)
+                try {
+                    if (cursor != null && cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (index != -1) {
+                            fileName = cursor.getString(index)
+                        }
+                    }
+                } finally {
+                    cursor?.close()
+                }
+            }
+            if (fileName == null) {
+                fileName = it.path
+                val cut = fileName?.lastIndexOf('/') ?: -1
+                if (cut != -1) {
+                    fileName = fileName?.substring(cut + 1)
+                }
+            }
+            val finalName = fileName ?: "audio.mp3"
+            onSendMessage(activeThreadRecipient ?: "", "🎵 Audio: $finalName")
+        }
+    }
+
+    val onlineUsers = remember {
+        androidx.compose.runtime.mutableStateMapOf(
+            "Alex Rivera" to true,
+            "Sarah Chen" to false,
+            "Tokyo Trip" to true,
+            "Emma Watson" to true,
+            "Lucas Peterson" to false,
+            "Sophia Martinez" to false,
+            "Liam Johnson" to false
+        )
+    }
 
     val recipientName = activeThreadRecipient
     LaunchedEffect(recipientName, chatMessages.size) {
@@ -6972,7 +6604,6 @@ fun ChatScreen(
 
     // Combined contact search/mapping
     val allCreatorsList = creators.map { it.name }
-    val allFollowersList = followersList.map { it.first }
 
     if (activeThreadRecipient == null) {
         // --- CHAT PORTAL (DM LIST & RECIPIENT SELECTOR) ---
@@ -6992,7 +6623,7 @@ fun ChatScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                    .padding(horizontal = 16.dp, vertical = 18.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -7005,28 +6636,21 @@ fun ChatScreen(
                         ),
                         color = Color.White
                     )
-                    Text(
-                        text = "Encrypted direct messaging active",
-                        color = GrayText,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                
-                // Encryption Global Toggle in Header
-                IconButton(
-                    onClick = { onToggleEncryption() },
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(if (encryptionEnabled) Color(0x3300FF88) else Color.DarkGray.copy(alpha = 0.3f))
-                        .testTag("portal_encryption_toggle")
-                ) {
-                    Icon(
-                        imageVector = if (encryptionEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
-                        contentDescription = "Toggle Encryption",
-                        tint = if (encryptionEnabled) Color(0xFF00FF88) else Color.LightGray,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Encrypted",
+                            tint = Color(0xFF00FF88),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "End-to-End Encrypted",
+                            color = Color(0xFF00FF88),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
@@ -7045,7 +6669,7 @@ fun ChatScreen(
                             .background(if (isSelected) RazorTeal else Color(0x15FFFFFF))
                             .border(1.dp, if (isSelected) Color.Transparent else Color(0x22FFFFFF), RoundedCornerShape(20.dp))
                             .clickable { selectedCategoryTab = tab }
-                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                            .padding(horizontal = 14.dp, vertical = 8.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
@@ -7062,11 +6686,11 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 10.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF1F1532))
-                    .border(1.dp, Color(0xFF332353), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+                    .border(1.dp, Color(0xFF332353), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 12.dp, vertical = 12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
@@ -7092,7 +6716,7 @@ fun ChatScreen(
                 }
             }
 
-            // Active Now Section (WhatsApp/Messenger Style bubble list)
+            // Active Now Section
             Column(modifier = Modifier.padding(vertical = 8.dp)) {
                 Text(
                     text = "ACTIVE NOW",
@@ -7100,7 +6724,7 @@ fun ChatScreen(
                     fontWeight = FontWeight.Black,
                     color = Color(0xFF00FF88),
                     letterSpacing = 1.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                 )
                 
                 LazyRow(
@@ -7111,12 +6735,13 @@ fun ChatScreen(
                         "Creators" -> creators.map { Triple(it.name, it.name.take(4), Color(0xFF00FF88)) }
                         "Followers" -> followersList
                         else -> {
-                            // Merge
                             creators.map { Triple(it.name, it.name.take(4), Color(0xFF00FF88)) } + followersList
                         }
                     }
 
                     items(activePeople) { user ->
+                        val isUserOnline = onlineUsers[user.first] ?: true
+                        val userStatusColor = if (isUserOnline) Color(0xFF00FF88) else Color(0xFFFF4D4D)
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
@@ -7130,7 +6755,7 @@ fun ChatScreen(
                                         .clip(CircleShape)
                                         .background(
                                             Brush.linearGradient(
-                                                colors = listOf(RazorBlue, Color(0xFF00FF88))
+                                                colors = listOf(RazorBlue, userStatusColor)
                                             )
                                         )
                                         .padding(2.dp),
@@ -7156,7 +6781,7 @@ fun ChatScreen(
                                     modifier = Modifier
                                         .size(14.dp)
                                         .clip(CircleShape)
-                                        .background(Color(0xFF00FF88))
+                                        .background(userStatusColor)
                                         .border(2.dp, Color(0xFF0F081D), CircleShape)
                                 )
                             }
@@ -7172,125 +6797,13 @@ fun ChatScreen(
                 }
             }
 
-            // Financial action required notice
-            val pendingDineMsg = chatMessages.find { it.isFinancialRequest && it.paymentStatus == "NONE" }
-            if (pendingDineMsg != null && chatSearchQuery.isEmpty()) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp)
-                        .border(1.dp, Color(0xFF00FF88).copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF130E26)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(Color(0xFF00FF88), Color(0xFF00E676))
-                                        ),
-                                        CircleShape
-                                    )
-                                    .padding(2.dp)
-                                    .background(Color.Black, CircleShape),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(text = "D", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black)
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Alex Rivera (Invoice)",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                                Text(
-                                    text = "💸 Split Bill Request: $45.00",
-                                    color = Color(0xFF00FF88),
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Black
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Button(
-                                onClick = { onDeclineInvoice(pendingDineMsg) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B1437).copy(alpha = 0.4f)),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f).height(36.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text("Decline", color = Color(0xFFFF4C4C), fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            }
-
-                            Button(
-                                onClick = { onPayInvoice(pendingDineMsg) },
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF88)),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.weight(1f).height(36.dp),
-                                contentPadding = PaddingValues(0.dp)
-                            ) {
-                                Text("Pay Securely", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 12.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // WhatsApp Style Encrypted Notification Header Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0x1500FF88)),
-                border = BorderStroke(1.dp, Color(0x3300FF88))
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Encrypted Lock",
-                        tint = Color(0xFF00FF88),
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "🔒 E2EE Active: Messages are locally encrypted and decrypted on your device. Tap any contact below to start chatting securely.",
-                        color = Color(0xFFE2FFE6),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 15.sp
-                    )
-                }
-            }
-
             Text(
                 text = "CONVERSATIONS",
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Black,
                 color = GrayText,
                 letterSpacing = 1.sp,
-                modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 6.dp)
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 6.dp)
             )
 
             // Dynamic conversation list mapping
@@ -7303,11 +6816,11 @@ fun ChatScreen(
             )
 
             val defaultChats = listOf(
-                ChatItem("Alex Rivera", "Got the transfer, thanks ...", "10:42 AM", 0, true),
+                ChatItem("Alex Rivera", "Hey! Let's check out that new design asset.", "10:42 AM", 0, true),
                 ChatItem("Sarah Chen", "Are we still meeting at 5 for coffee?", "Yesterday", 0, true),
-                ChatItem("Tokyo Trip", "@mihe: secure key updated for ...", "2m ago", 0, true),
-                ChatItem("Emma Watson", "Hey! Thanks for the content tip!", "Thursday", 1, false),
-                ChatItem("Lucas Peterson", "I followed your dynamic stream!", "Mon", 0, false)
+                ChatItem("Tokyo Trip", "Did you check out the new design?", "2m ago", 0, true),
+                ChatItem("Emma Watson", "Hey! Thanks for sharing the updates!", "Thursday", 0, false),
+                ChatItem("Lucas Peterson", "I really enjoyed our chat yesterday!", "Mon", 0, false)
             )
 
             val recentChatsList = defaultChats.map { defaultChat ->
@@ -7320,15 +6833,11 @@ fun ChatScreen(
                 if (threadMsgs.isNotEmpty()) {
                     val lastMsg = threadMsgs.last()
                     val contentDisclosed = if (lastMsg.isEncrypted) {
-                        if (encryptionEnabled) {
-                            try {
-                                val decoded = android.util.Base64.decode(lastMsg.encryptedContent, android.util.Base64.DEFAULT)
-                                String(decoded)
-                            } catch (e: Exception) {
-                                lastMsg.encryptedContent
-                            }
-                        } else {
-                            "🔒 [Encrypted Message]"
+                        try {
+                            val decoded = android.util.Base64.decode(lastMsg.encryptedContent, android.util.Base64.DEFAULT)
+                            String(decoded, Charsets.UTF_8).trim()
+                        } catch (e: Exception) {
+                            lastMsg.encryptedContent
                         }
                     } else {
                         lastMsg.encryptedContent
@@ -7376,12 +6885,8 @@ fun ChatScreen(
                 } else {
                     items(filteredChats) { chat ->
                         val isGroup = chat.title == "Tokyo Trip"
-                        val dynamicIndicator = when (chat.title) {
-                            "Alex Rivera" -> RazorTeal
-                            "Sarah Chen" -> Color(0xFFFFB300)
-                            "Emma Watson" -> Color(0xFF00FF88)
-                            else -> null
-                        }
+                        val isChatOnline = onlineUsers[chat.title] ?: true
+                        val dynamicIndicator = if (isChatOnline) Color(0xFF00FF88) else Color(0xFFFF4D4D)
                         
                         ChatConversationRow(
                             title = chat.title,
@@ -7412,48 +6917,6 @@ fun ChatScreen(
                         )
                     )
                     drawRect(brush = gradientBrush)
-
-                    // Draw extremely subtle WhatsApp doodle outlines for classic wallpaper aesthetic!
-                    // Smiley Face Doodle
-                    drawCircle(
-                        color = Color(0x0500FF88),
-                        radius = 25.dp.toPx(),
-                        center = androidx.compose.ui.geometry.Offset(100f, 320f),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                    )
-                    // Love Heart Doodle
-                    val heartPath = androidx.compose.ui.graphics.Path().apply {
-                        moveTo(size.width - 150f, size.height * 0.35f)
-                        cubicTo(size.width - 200f, size.height * 0.31f, size.width - 240f, size.height * 0.38f, size.width - 150f, size.height * 0.43f)
-                        cubicTo(size.width - 60f, size.height * 0.38f, size.width - 100f, size.height * 0.31f, size.width - 150f, size.height * 0.35f)
-                    }
-                    drawPath(
-                        path = heartPath,
-                        color = Color(0x04FF4CA0),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                    )
-                    // Custom chat bubble doodle outline
-                    val chatBubbleDoodle = androidx.compose.ui.graphics.Path().apply {
-                        addRoundRect(
-                            androidx.compose.ui.geometry.RoundRect(
-                                rect = androidx.compose.ui.geometry.Rect(
-                                    left = 120f,
-                                    top = size.height * 0.7f,
-                                    right = 240f,
-                                    bottom = size.height * 0.7f + 70f
-                                ),
-                                cornerRadius = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
-                            )
-                        )
-                        moveTo(120f, size.height * 0.7f + 30f)
-                        lineTo(100f, size.height * 0.7f + 40f)
-                        lineTo(120f, size.height * 0.7f + 50f)
-                    }
-                    drawPath(
-                        path = chatBubbleDoodle,
-                        color = Color(0x0500E5FF),
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
-                    )
                 }
         ) {
             // Header: Glassmorphic Floating Top Bar
@@ -7461,7 +6924,7 @@ fun ChatScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xE61B112D)) // Semi-transparent glass header
-                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
@@ -7473,6 +6936,10 @@ fun ChatScreen(
                 
                 Spacer(modifier = Modifier.width(4.dp))
                 
+                val isOnline = onlineUsers[recipientName] ?: true
+                val statusColor = if (isOnline) Color(0xFF00FF88) else Color(0xFFFF4D4D)
+                val statusText = if (isOnline) "Online" else "Offline"
+
                 // Avatar with online status ring
                 Box(contentAlignment = Alignment.BottomEnd) {
                     Box(
@@ -7481,7 +6948,7 @@ fun ChatScreen(
                             .clip(CircleShape)
                             .background(
                                 Brush.linearGradient(
-                                    colors = listOf(RazorBlue, Color(0xFF00FF88))
+                                    colors = listOf(RazorBlue, statusColor)
                                 )
                             ),
                         contentAlignment = Alignment.Center
@@ -7498,7 +6965,7 @@ fun ChatScreen(
                         modifier = Modifier
                             .size(10.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF00FF88))
+                            .background(statusColor)
                             .border(1.5.dp, Color(0xFF1B112D), CircleShape)
                     )
                 }
@@ -7512,159 +6979,60 @@ fun ChatScreen(
                         color = Color.White,
                         fontSize = 15.sp
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable {
+                                onlineUsers[recipientName] = !isOnline
+                            }
+                    ) {
                         Box(
                             modifier = Modifier
                                 .size(6.dp)
                                 .clip(CircleShape)
-                                .background(if (encryptionEnabled) Color(0xFF00FF88) else GrayText)
+                                .background(statusColor)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (encryptionEnabled) "E2EE Secure Channel" else "Unencrypted Plaintext",
-                            color = if (encryptionEnabled) Color(0xFF00FF88) else GrayText,
+                            text = statusText,
+                            color = statusColor,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
-                    }
-                }
-                
-                // Header Lock toggle
-                IconButton(
-                    onClick = { onToggleEncryption() },
-                    modifier = Modifier
-                        .testTag("chat_header_encryption_toggle")
-                        .clip(CircleShape)
-                        .background(if (encryptionEnabled) Color(0x3300FF88) else Color.DarkGray.copy(alpha = 0.3f))
-                ) {
-                    Icon(
-                        imageVector = if (encryptionEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
-                        contentDescription = "Toggle Encryption",
-                        tint = if (encryptionEnabled) Color(0xFF00FF88) else Color.LightGray,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            // Group transaction summary details
-            if (recipientName == "Tokyo Trip") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0x33130E22))
-                        .padding(vertical = 10.dp, horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column {
-                        Text("TOTAL SPENT", color = GrayText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                        Text("$1,450.00", color = LightText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("YOU OWE", color = GrayText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (settleUpStatePaid) "$0.00" else "-$120.00",
-                            color = if (settleUpStatePaid) Color(0xFF00FF88) else Color(0xFFFFEB3B),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Black
+                            text = "• Click to toggle",
+                            color = Color.Gray.copy(alpha = 0.8f),
+                            fontSize = 10.sp
                         )
                     }
                 }
-            }
 
-            // WhatsApp Style Amber Security Lock Notification Card inside chat thread
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0x1AFFF176)), // Warm semi-transparent amber
-                border = BorderStroke(1.dp, Color(0x33FFF176))
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Lock",
-                        tint = Color(0xFFFFD54F),
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "🔒 Messages in this thread are fully encrypted. No external server, including SocialHub nodes, can read the handshake packets.",
-                        color = Color(0xFFFFF9C4),
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        lineHeight = 15.sp
-                    )
-                }
-            }
-
-            // Gemini Co-Pilot Assist Panel
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.04f)),
-                border = BorderStroke(1.dp, Color(0x22FFFFFF))
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                // Small secure padlock badge in header
+                Box(
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x2200FF88))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        modifier = Modifier.fillMaxWidth()
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = "Gemini",
-                                tint = SafeGold,
-                                modifier = Modifier.size(14.dp)
-                            )
-                            Text(
-                                text = "GEMINI CO-PILOT ASSIST",
-                                color = SafeGold,
-                                fontSize = 10.sp,
-                                fontWeight = FontWeight.Black,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                        Text(
-                            text = "READY ✨",
-                            color = Color(0xFF00FF88),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Black
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Secure",
+                            tint = Color(0xFF00FF88),
+                            modifier = Modifier.size(11.dp)
                         )
-                    }
-                    Text(
-                        text = "🎯 Suggestion: \"Hey! Our active session keys are secured with E2EE. Let me know if everything is ready on your side! 🔑🔒\"",
-                        color = LightText,
-                        fontSize = 11.sp,
-                        lineHeight = 15.sp
-                    )
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.End)
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color(0x3300FF88))
-                            .bounceClick {
-                                inputMessage = "Hey! Our active session keys are secured with E2EE. Let me know if everything is ready on your side! 🔑🔒"
-                            }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
                         Text(
-                            text = "USE SUGGESTION",
+                            text = "E2EE",
                             color = Color(0xFF00FF88),
-                            fontWeight = FontWeight.Black,
-                            fontSize = 9.sp
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
@@ -7672,13 +7040,15 @@ fun ChatScreen(
 
             // Filter thread messages
             val threadMessages = chatMessages.filter {
-                (it.senderName == recipientName && it.receiverName == "You") ||
-                (it.senderName == "You" && it.receiverName == recipientName) ||
-                (recipientName == "Tokyo Trip" && it.receiverName == "Tokyo Trip")
+                !it.isDeletedForMe && (
+                    (it.senderName == recipientName && it.receiverName == "You") ||
+                    (it.senderName == "You" && it.receiverName == recipientName) ||
+                    (recipientName == "Tokyo Trip" && it.receiverName == "Tokyo Trip")
+                )
             }
 
-            // Auto-scroller whenever a new message is loaded
-            LaunchedEffect(threadMessages.size) {
+            // Auto-scroller whenever a new message is loaded or thread changes
+            LaunchedEffect(threadMessages.size, recipientName) {
                 if (threadMessages.isNotEmpty()) {
                     listState.animateScrollToItem(threadMessages.size - 1)
                 }
@@ -7697,53 +7067,15 @@ fun ChatScreen(
                     item {
                         ChatBubble(
                             sender = "Alex",
-                            text = "Hey guys, I just booked the bullet train tickets for Kyoto! 🚄",
+                            text = "Hey guys, let me know if you checked out the trip details! 🚄",
                             time = "4:20 PM",
                             isMe = false
                         )
                     }
-
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = CardBackground),
-                            border = BorderStroke(1.dp, MinimalBorder)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(RazorBlue.copy(alpha = 0.2f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(imageVector = Icons.Default.Train, contentDescription = null, tint = RazorBlue)
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text("Shinkansen Tickets", fontWeight = FontWeight.Bold, color = LightText, fontSize = 13.sp)
-                                        Text("Paid by Alex • Split equally", color = GrayText, fontSize = 11.sp)
-                                    }
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("$320.00", color = LightText, fontWeight = FontWeight.Black, fontSize = 14.sp)
-                                    Text("You owe $120.00", color = RazorTeal, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                    }
-
                     item {
                         ChatBubble(
                             sender = "You",
-                            text = "Thanks for handling that. Did anyone grab coffee yet? ☕️",
+                            text = "Yes, everything looks fantastic. I am uploading the schedule sheet here.",
                             time = "4:22 PM",
                             isMe = true
                         )
@@ -7752,70 +7084,196 @@ fun ChatScreen(
 
                 items(threadMessages) { msg ->
                     val isMe = msg.senderName == "You"
-                    val isEncrypted = msg.isEncrypted
-                    val contentDisclosed = if (isEncrypted) {
-                        if (encryptionEnabled) {
-                            try {
-                                String(android.util.Base64.decode(msg.encryptedContent, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
-                            } catch (e: Exception) {
-                                msg.encryptedContent
-                            }
-                        } else {
+                    // Transparent decryption under the hood
+                    val contentDisclosed = if (msg.isEncrypted) {
+                        try {
+                            String(android.util.Base64.decode(msg.encryptedContent, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
+                        } catch (e: Exception) {
                             msg.encryptedContent
                         }
                     } else {
                         msg.encryptedContent
                     }
 
-                    if (msg.isFinancialRequest) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1335)),
-                            border = BorderStroke(1.2.dp, if (msg.paymentStatus == "PAID") Color(0xFF00FF88) else RazorBlue),
-                            shape = RoundedCornerShape(16.dp)
+                    // Check if it is a simulated attachment message
+                    val isAttachment = contentDisclosed.startsWith("📄 Document: ") ||
+                            contentDisclosed.startsWith("📁 Folder: ") ||
+                            contentDisclosed.startsWith("🖼️ Image: ") ||
+                            contentDisclosed.startsWith("🎥 Video: ") ||
+                            contentDisclosed.startsWith("🎵 Audio: ")
+
+                    if (isAttachment) {
+                        val prefix = contentDisclosed.substringBefore(": ")
+                        val fileName = contentDisclosed.substringAfter(": ")
+                        val (icon, tint, desc) = when (prefix) {
+                            "📄 Document" -> Triple(Icons.Default.InsertDriveFile, Color(0xFF42A5F5), "PDF Document • 2.4 MB")
+                            "📁 Folder" -> Triple(Icons.Default.Folder, Color(0xFFFFCA28), "Compressed Folder • 12.8 MB")
+                            "🖼️ Image" -> Triple(Icons.Default.Image, Color(0xFFEC407A), "JPEG Image • 1.6 MB")
+                            "🎥 Video" -> Triple(Icons.Default.Movie, Color(0xFFAB47BC), "MPEG-4 Video • 10.4 MB")
+                            "🎵 Audio" -> Triple(Icons.Default.MusicNote, Color(0xFF26A69A), "MP3 Audio • 4.1 MB")
+                            else -> Triple(Icons.Default.InsertDriveFile, Color.Gray, "Attachment File")
+                        }
+
+                        val alignment = if (isMe) Alignment.End else Alignment.Start
+                        val bubbleShape = if (isMe) {
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 16.dp, bottomEnd = 2.dp)
+                        } else {
+                            RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 2.dp)
+                        }
+
+                        var showAttachmentMenu by remember { mutableStateOf(false) }
+
+                        Column(
+                            horizontalAlignment = alignment,
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
+                            Box(
+                                modifier = Modifier
+                                    .widthIn(max = 280.dp)
+                                    .clip(bubbleShape)
+                                    .background(if (isMe) Color(0x3D00FF88) else Color(0x2422123C))
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isMe) Color(0xFF00FF88).copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f),
+                                        shape = bubbleShape
+                                    )
+                                    .then(
+                                        if (isMe) {
+                                            Modifier.pointerInput(Unit) {
+                                                detectTapGestures(
+                                                    onLongPress = {
+                                                        showAttachmentMenu = true
+                                                    }
+                                                )
+                                            }
+                                        } else {
+                                            Modifier.clickable { /* Simulate download/open */ }
+                                        }
+                                    )
+                                    .padding(12.dp)
+                            ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(tint.copy(alpha = 0.2f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(24.dp))
+                                    }
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = if (msg.paymentStatus == "PAID") "SECURE INVOICE (PAID ✅)" else "SECURE INVOICE (PENDING 💸)",
-                                            fontWeight = FontWeight.Black,
-                                            color = if (msg.paymentStatus == "PAID") Color(0xFF00FF88) else RazorBlue,
-                                            fontSize = 10.sp,
-                                            letterSpacing = 0.5.sp
+                                            text = fileName,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
                                         )
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text("Dinner split bill request", fontWeight = FontWeight.Bold, color = LightText, fontSize = 14.sp)
-                                        Text("Amount: $${String.format("%.2f", msg.amountRequested)}", color = GrayText, fontSize = 12.sp)
+                                        Text(
+                                            text = desc,
+                                            color = GrayText,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    if (msg.paymentStatus == "NONE") {
-                                        Button(
-                                            onClick = { onPayInvoice(msg) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
-                                            shape = RoundedCornerShape(10.dp),
-                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                                        ) {
-                                            Text("Pay", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                                }
+
+                                if (isMe) {
+                                    DropdownMenu(
+                                        expanded = showAttachmentMenu,
+                                        onDismissRequest = { showAttachmentMenu = false },
+                                        modifier = Modifier.background(Color(0xFF1B112D)).border(1.dp, Color(0xFF332353), RoundedCornerShape(8.dp))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = "Delete for Me",
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Text("Delete for me", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                                }
+                                            },
+                                            onClick = {
+                                                showAttachmentMenu = false
+                                                onDeleteMessageForMe(msg)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.DeleteForever,
+                                                        contentDescription = "Delete for Everyone",
+                                                        tint = Color(0xFFFF4D4D),
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Text("Delete for everyone", color = Color(0xFFFF4D4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                                }
+                                            },
+                                            onClick = {
+                                                showAttachmentMenu = false
+                                                onDeleteMessageForEveryone(msg)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp)
+                            ) {
+                                Text(
+                                    text = "${formatChatTimestamp(msg.timestamp)} • E2EE Secure 🔒",
+                                    color = GrayText,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                if (isMe) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    when {
+                                        msg.isSeen -> {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DoneAll,
+                                                    contentDescription = "Seen",
+                                                    tint = Color(0xFF00FF88),
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text("Seen", color = Color(0xFF00FF88), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                            }
                                         }
-                                    } else {
-                                        Box(
-                                            modifier = Modifier
-                                                .background(if (msg.paymentStatus == "PAID") Color(0x3300FF88) else Color.Red.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
-                                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                                        ) {
-                                            Text(
-                                                text = msg.paymentStatus, 
-                                                color = if (msg.paymentStatus == "PAID") Color(0xFF00FF88) else Color.Red, 
-                                                fontSize = 9.sp, 
-                                                fontWeight = FontWeight.Black
-                                            )
+                                        msg.isDelivered -> {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.DoneAll,
+                                                    contentDescription = "Delivered",
+                                                    tint = Color.LightGray,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text("Delivered", color = GrayText, fontSize = 9.sp)
+                                            }
+                                        }
+                                        else -> {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Done,
+                                                    contentDescription = "Sent",
+                                                    tint = Color.LightGray,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(2.dp))
+                                                Text("Sent", color = GrayText, fontSize = 9.sp)
+                                            }
                                         }
                                     }
                                 }
@@ -7824,89 +7282,14 @@ fun ChatScreen(
                     } else {
                         ChatBubble(
                             sender = msg.senderName,
-                            text = if (isEncrypted && encryptionEnabled) "🔒 $contentDisclosed" else contentDisclosed,
-                            time = "${formatChatTimestamp(msg.timestamp)} • ${if (isEncrypted) "Secure E2EE 🔒" else "Plaintext"}",
+                            text = contentDisclosed,
+                            time = "${formatChatTimestamp(msg.timestamp)} • E2EE Secure 🔒",
                             isMe = isMe,
                             isSeen = msg.isSeen,
-                            isDelivered = msg.isDelivered
-                        )
-                    }
-                }
-            }
-
-            // Settle up liability card
-            if (recipientName == "Tokyo Trip" && !settleUpStatePaid) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1335)),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, RazorBlue.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text("Settle Up Liability", fontWeight = FontWeight.Bold, color = LightText, fontSize = 14.sp)
-                            Text("Use wallet to pay Alex directly", color = GrayText, fontSize = 11.sp)
-                        }
-                        
-                        Button(
-                            onClick = {
-                                settleUpStatePaid = true
-                                onSendMessage("Tokyo Trip", "✅ Settled up my part of Shinkansen Tickets ($120.00) !")
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Text("Settle Up $120.00", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 11.sp)
-                        }
-                    }
-                }
-            }
-
-            // Cryptographic Handshake Signature rotation bar
-            if (encryptionEnabled) {
-                var activeSignature by remember { mutableStateOf("sha256-0x4f8b9e...77a1") }
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Color(0xFF0C071A))
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(imageVector = Icons.Default.Key, contentDescription = null, tint = Color(0xFF00FF88), modifier = Modifier.size(10.dp))
-                        Text(
-                            text = "ACTIVE HANDSHAKE SIGNATURE: $activeSignature",
-                            color = Color(0xFF00FF88),
-                            fontSize = 8.sp,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0x3300FF88))
-                            .bounceClick {
-                                val chars = "0123456789abcdef"
-                                val newHash = (1..6).map { chars.random() }.joinToString("")
-                                activeSignature = "sha256-0x${newHash}...${chars.random()}${chars.random()}${chars.random()}${chars.random()}"
-                            }
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                            .testTag("rotate_key_badge")
-                    ) {
-                        Text(
-                            text = "ROTATE HANDSHAKE KEY",
-                            color = Color(0xFF00FF88),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Black,
-                            fontFamily = FontFamily.Monospace
+                            isDelivered = msg.isDelivered,
+                            isDeletedForEveryone = msg.isDeletedForEveryone,
+                            onDeleteForMe = { onDeleteMessageForMe(msg) },
+                            onDeleteForEveryone = { onDeleteMessageForEveryone(msg) }
                         )
                     }
                 }
@@ -7920,50 +7303,22 @@ fun ChatScreen(
                     .padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Media upload shortcuts
-                Row(
-                    modifier = Modifier.padding(end = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                // Persistent single Plus icon button on the left - NO other media shortcuts
+                IconButton(
+                    onClick = { showAttachmentDialog = true },
+                    modifier = Modifier
+                        .padding(end = 4.dp)
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF1E1535))
+                        .border(1.dp, Color(0xFF3B2A65), CircleShape)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF1E1535))
-                            .border(1.dp, Color(0xFF3B2A65), CircleShape)
-                            .bounceClick {
-                                onSendMessage(recipientName, "📷 Shared a photo")
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(imageVector = Icons.Default.PhotoLibrary, contentDescription = "Gallery", tint = RazorBlue, modifier = Modifier.size(16.dp))
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF1E1535))
-                            .border(1.dp, Color(0xFF3B2A65), CircleShape)
-                            .bounceClick {
-                                onSendMessage(recipientName, "🎤 Sent a voice note")
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(imageVector = Icons.Default.Mic, contentDescription = "Voice note", tint = RazorBlue, modifier = Modifier.size(16.dp))
-                    }
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF1E1535))
-                            .border(1.dp, Color(0xFF3B2A65), CircleShape)
-                            .bounceClick {
-                                onSendMessage(recipientName, "📍 Shared a location")
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(imageVector = Icons.Default.LocationOn, contentDescription = "Share location", tint = RazorBlue, modifier = Modifier.size(16.dp))
-                    }
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Add Attachment",
+                        tint = RazorBlue,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
                 
                 // Frosted Text Input with integrated security lock status
@@ -7974,7 +7329,7 @@ fun ChatScreen(
                         .background(Color(0xFF1F1532))
                         .border(
                             width = 1.2.dp,
-                            color = if (encryptionEnabled) Color(0xFF00FF88).copy(alpha = 0.8f) else Color(0xFF332353),
+                            color = Color(0xFF00FF88).copy(alpha = 0.5f),
                             shape = RoundedCornerShape(24.dp)
                         )
                         .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -7992,34 +7347,17 @@ fun ChatScreen(
                             decorationBox = { innerTextField ->
                                 if (inputMessage.isEmpty()) {
                                     Text(
-                                        text = if (encryptionEnabled) "🔒 Send encrypted..." else "Send unencrypted...",
-                                        color = if (encryptionEnabled) Color(0xFF00FF88).copy(alpha = 0.5f) else GrayText,
+                                        text = "Send secure message...",
+                                        color = Color(0xFF00FF88).copy(alpha = 0.5f),
                                         fontSize = 14.sp
                                     )
                                 }
                                 innerTextField()
                             }
                         )
-                        
-                        // Mini lock icon trigger in input box
-                        Box(
-                            modifier = Modifier
-                                .size(24.dp)
-                                .clip(CircleShape)
-                                .bounceClick { onToggleEncryption() }
-                                .testTag("chat_input_encryption_toggle"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = if (encryptionEnabled) Icons.Default.Lock else Icons.Default.LockOpen,
-                                contentDescription = "Toggle Encryption",
-                                tint = if (encryptionEnabled) Color(0xFF00FF88) else GrayText,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
                     }
                 }
-
+                
                 // WhatsApp-Style Circular Glowing Send Button next to input
                 Box(
                     modifier = Modifier
@@ -8050,7 +7388,131 @@ fun ChatScreen(
             }
         }
     }
+
+    // Modern custom Dialog for selecting Attachments
+    if (showAttachmentDialog) {
+        Dialog(onDismissRequest = { showAttachmentDialog = false }) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF1B112D)),
+                border = BorderStroke(1.2.dp, Color(0xFF332353)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Share Attachment",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    
+                    val attachmentOptions = listOf(
+                        Quadruple("Document / File", Icons.Default.InsertDriveFile, Color(0xFF42A5F5), "📄 Document: Project_Report_Final.pdf"),
+                        Quadruple("Folder", Icons.Default.Folder, Color(0xFFFFCA28), "📁 Folder: Design_Resources_v3"),
+                        Quadruple("Gallery / Image", Icons.Default.Image, Color(0xFFEC407A), "🖼️ Image: photo_capture.jpg"),
+                        Quadruple("Video", Icons.Default.Movie, Color(0xFFAB47BC), "🎥 Video: recording_draft.mp4"),
+                        Quadruple("Audio", Icons.Default.MusicNote, Color(0xFF26A69A), "🎵 Audio: speech_memo.mp3")
+                    )
+                    
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        attachmentOptions.forEach { opt ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFF24173D))
+                                    .clickable {
+                                        showAttachmentDialog = false
+                                        when (opt.first) {
+                                            "Document / File" -> {
+                                                try {
+                                                    documentPickerLauncher.launch("*/*")
+                                                } catch (e: Exception) {
+                                                    onSendMessage(recipientName ?: "", opt.fourth)
+                                                }
+                                            }
+                                            "Folder" -> {
+                                                try {
+                                                    documentPickerLauncher.launch("*/*")
+                                                } catch (e: Exception) {
+                                                    onSendMessage(recipientName ?: "", opt.fourth)
+                                                }
+                                            }
+                                            "Gallery / Image" -> {
+                                                try {
+                                                    galleryPickerLauncher.launch("image/*")
+                                                } catch (e: Exception) {
+                                                    onSendMessage(recipientName ?: "", opt.fourth)
+                                                }
+                                            }
+                                            "Video" -> {
+                                                try {
+                                                    videoPickerLauncher.launch("video/*")
+                                                } catch (e: Exception) {
+                                                    onSendMessage(recipientName ?: "", opt.fourth)
+                                                }
+                                            }
+                                            "Audio" -> {
+                                                try {
+                                                    audioPickerLauncher.launch("audio/*")
+                                                } catch (e: Exception) {
+                                                    onSendMessage(recipientName ?: "", opt.fourth)
+                                                }
+                                            }
+                                            else -> {
+                                                onSendMessage(recipientName ?: "", opt.fourth)
+                                            }
+                                        }
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(opt.third.copy(alpha = 0.2f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(imageVector = opt.second, contentDescription = null, tint = opt.third, modifier = Modifier.size(20.dp))
+                                }
+                                Text(
+                                    text = opt.first,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    TextButton(
+                        onClick = { showAttachmentDialog = false },
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color.LightGray)
+                    ) {
+                        Text("Cancel", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+            }
+        }
+    }
 }
+
+data class Quadruple<A, B, C, D>(val first: A, val second: B, val third: C, val fourth: D)
 
 @Composable
 fun ChatConversationRow(
@@ -8196,7 +7658,10 @@ fun ChatBubble(
     time: String,
     isMe: Boolean,
     isSeen: Boolean = true,
-    isDelivered: Boolean = true
+    isDelivered: Boolean = true,
+    isDeletedForEveryone: Boolean = false,
+    onDeleteForMe: (() -> Unit)? = null,
+    onDeleteForEveryone: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -8223,6 +7688,8 @@ fun ChatBubble(
             }
         }
 
+        var showMenu by remember { mutableStateOf(false) }
+
         Column(
             horizontalAlignment = if (isMe) Alignment.End else Alignment.Start
         ) {
@@ -8237,7 +7704,9 @@ fun ChatBubble(
                     .widthIn(max = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp * 0.75).dp)
                     .clip(bubbleShape)
                     .background(
-                        if (isMe) {
+                        if (isDeletedForEveryone) {
+                            Color(0x0F888888)
+                        } else if (isMe) {
                             Color(0x2E00FF88) // Glowing semi-transparent green glass
                         } else {
                             Color(0x1F22123C) // Cozy dark glass
@@ -8246,13 +7715,28 @@ fun ChatBubble(
                     .border(
                         width = 1.dp,
                         brush = Brush.linearGradient(
-                            colors = if (isMe) {
+                            colors = if (isDeletedForEveryone) {
+                                listOf(Color.White.copy(alpha = 0.05f), Color.Transparent)
+                            } else if (isMe) {
                                 listOf(Color(0xFF00FF88).copy(alpha = 0.4f), Color.Transparent)
                             } else {
                                 listOf(Color.White.copy(alpha = 0.12f), Color.Transparent)
                             }
                         ),
                         shape = bubbleShape
+                    )
+                    .then(
+                        if (!isDeletedForEveryone && (onDeleteForMe != null || onDeleteForEveryone != null)) {
+                            Modifier.pointerInput(Unit) {
+                                detectTapGestures(
+                                    onLongPress = {
+                                        showMenu = true
+                                    }
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
                     )
                     .padding(horizontal = 14.dp, vertical = 10.dp)
             ) {
@@ -8268,12 +7752,60 @@ fun ChatBubble(
                         Spacer(modifier = Modifier.height(2.dp))
                     }
                     Text(
-                        text = text,
-                        color = Color.White,
+                        text = if (isDeletedForEveryone) "🚫 This message was deleted" else text,
+                        color = if (isDeletedForEveryone) Color.Gray else Color.White,
                         fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = if (isDeletedForEveryone) FontWeight.Normal else FontWeight.Bold,
+                        fontStyle = if (isDeletedForEveryone) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
                         lineHeight = 19.sp
                     )
+
+                    if (!isDeletedForEveryone && (onDeleteForMe != null || onDeleteForEveryone != null)) {
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            modifier = Modifier.background(Color(0xFF1B112D)).border(1.dp, Color(0xFF332353), RoundedCornerShape(8.dp))
+                        ) {
+                            if (onDeleteForMe != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete for Me",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text("Delete for me", color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        onDeleteForMe()
+                                    }
+                                )
+                            }
+                            if (isMe && onDeleteForEveryone != null) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            Icon(
+                                                imageVector = Icons.Default.DeleteForever,
+                                                contentDescription = "Delete for Everyone",
+                                                tint = Color(0xFFFF4D4D),
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Text("Delete for everyone", color = Color(0xFFFF4D4D), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        onDeleteForEveryone()
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
             }
             
@@ -8289,27 +7821,42 @@ fun ChatBubble(
                 )
                 if (isMe) {
                     Spacer(modifier = Modifier.width(4.dp))
-                    if (isSeen) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.DoneAll,
-                                contentDescription = "Seen",
-                                tint = Color(0xFF00FF88),
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text("Seen", color = Color(0xFF00FF88), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    when {
+                        isSeen -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.DoneAll,
+                                    contentDescription = "Seen",
+                                    tint = Color(0xFF00FF88),
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text("Seen", color = Color(0xFF00FF88), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                            }
                         }
-                    } else if (isDelivered) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Done,
-                                contentDescription = "Delivered",
-                                tint = Color.LightGray,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text("Delivered", color = GrayText, fontSize = 9.sp)
+                        isDelivered -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.DoneAll,
+                                    contentDescription = "Delivered",
+                                    tint = Color.LightGray,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text("Delivered", color = GrayText, fontSize = 9.sp)
+                            }
+                        }
+                        else -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Done,
+                                    contentDescription = "Sent",
+                                    tint = Color.LightGray,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text("Sent", color = GrayText, fontSize = 9.sp)
+                            }
                         }
                     }
                 }

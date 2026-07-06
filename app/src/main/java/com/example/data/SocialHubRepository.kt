@@ -170,8 +170,9 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
 
     suspend fun insertTransaction(transaction: Transaction) = dao.insertTransaction(transaction)
 
-    suspend fun sendChatMessage(message: ChatMessage) = dao.insertChatMessage(message)
+    suspend fun sendChatMessage(message: ChatMessage): Long = dao.insertChatMessage(message)
     suspend fun updateChatMessage(message: ChatMessage) = dao.updateChatMessage(message)
+    suspend fun deleteChatMessage(message: ChatMessage) = dao.deleteChatMessage(message)
     suspend fun markMessagesAsSeenForSender(senderName: String) = dao.markMessagesAsSeenForSender(senderName)
     suspend fun markMessagesAsSeenForGroup(receiverName: String) = dao.markMessagesAsSeenForGroup(receiverName)
 

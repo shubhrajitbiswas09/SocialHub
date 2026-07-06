@@ -16,5 +16,7 @@ data class ChatMessage(
     val paymentStatus: String = "NONE", // "NONE", "PAID", "DECLINED"
     val timestamp: Long = System.currentTimeMillis(),
     val isSeen: Boolean = false,
-    val isDelivered: Boolean = true
+    val isDelivered: Boolean = true,
+    val isDeletedForMe: Boolean = false,
+    val isDeletedForEveryone: Boolean = false
 )

@@ -939,10 +939,45 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
                 receiverName = receiverHandle,
                 encryptedContent = finalContent,
                 isEncrypted = _chatEncryptionEnabled.value,
-                timestamp = System.currentTimeMillis()
+                timestamp = System.currentTimeMillis(),
+                isDelivered = false,
+                isSeen = false
             )
-            repository.sendChatMessage(msg)
+            val insertedId = repository.sendChatMessage(msg)
 
+            if (receiverHandle == "Tokyo Trip") {
+                kotlinx.coroutines.delay(800)
+                repository.updateChatMessage(msg.copy(id = insertedId.toInt(), isDelivered = true))
+                return@launch
+            }
+
+            // Simulate Delivery: wait 1 second, then mark as Delivered
+            kotlinx.coroutines.delay(1000)
+            val deliveredMsg = msg.copy(id = insertedId.toInt(), isDelivered = true)
+            repository.updateChatMessage(deliveredMsg)
+
+            // Simulate Read/Seen: wait another 1.5 seconds, then mark as Seen
+            kotlinx.coroutines.delay(1500)
+            val seenMsg = deliveredMsg.copy(isSeen = true)
+            repository.updateChatMessage(seenMsg)
+        }
+    }
+
+    fun deleteChatMessage(message: ChatMessage) {
+        viewModelScope.launch {
+            repository.deleteChatMessage(message)
+        }
+    }
+
+    fun deleteMessageForMe(message: ChatMessage) {
+        viewModelScope.launch {
+            repository.updateChatMessage(message.copy(isDeletedForMe = true))
+        }
+    }
+
+    fun deleteMessageForEveryone(message: ChatMessage) {
+        viewModelScope.launch {
+            repository.updateChatMessage(message.copy(isDeletedForEveryone = true, encryptedContent = "This message was deleted"))
         }
     }
 
