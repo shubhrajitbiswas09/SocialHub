@@ -1,5 +1,6 @@
 package com.example.ui
 
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -272,6 +273,24 @@ fun BubbleEffectContainer(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SocialHubApp(viewModel: SocialHubViewModel) {
+    val isEmailVerified by viewModel.isEmailVerified.collectAsStateWithLifecycle()
+    val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
+    val emailOtpSent by viewModel.emailOtpSent.collectAsStateWithLifecycle()
+    val isOtpVerifying by viewModel.isOtpVerifying.collectAsStateWithLifecycle()
+    val otpErrorMessage by viewModel.otpErrorMessage.collectAsStateWithLifecycle()
+
+    if (!isEmailVerified) {
+        MandatoryEmailVerificationScreen(
+            emailOtpSent = emailOtpSent,
+            isOtpVerifying = isOtpVerifying,
+            otpErrorMessage = otpErrorMessage,
+            userEmail = userEmail,
+            onSendOtp = { viewModel.sendEmailOtp(it) },
+            onVerifyOtp = { viewModel.verifyEmailOtp(it) }
+        )
+        return
+    }
+
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
     val isDataFetching by viewModel.isDataFetching.collectAsStateWithLifecycle()
     val walletBalance by viewModel.walletBalance.collectAsStateWithLifecycle()
@@ -347,6 +366,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
     val isTrendingFetching by viewModel.isTrendingFetching.collectAsStateWithLifecycle(initialValue = false)
     val selectedTopicInsight by viewModel.selectedTopicInsight.collectAsStateWithLifecycle(initialValue = null)
     val isGeneratingInsight by viewModel.isGeneratingInsight.collectAsStateWithLifecycle(initialValue = false)
+    val securityLogs by viewModel.securityLogs.collectAsStateWithLifecycle(initialValue = emptyList())
 
     // Direct local state for splits
     var marioPizzaSplitPaid by remember { mutableStateOf(false) }
@@ -715,7 +735,8 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                             onCreatorClick = { creatorId ->
                                                 viewModel.navigateTo(Screen.CreatorDetail(creatorId))
                                             },
-                                            onVideoClick = { activeInAppVideoPost = it }
+                                            onVideoClick = { activeInAppVideoPost = it },
+                                            onLoadMorePosts = { viewModel.loadMorePosts() }
                                         )
                                     }
                                 }
@@ -835,7 +856,8 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                 onMarkAsSeen = { viewModel.markMessagesAsSeen(it) },
                                 initialRecipient = target.initialRecipient,
                                 onDeleteMessageForMe = { viewModel.deleteMessageForMe(it) },
-                                onDeleteMessageForEveryone = { viewModel.deleteMessageForEveryone(it) }
+                                onDeleteMessageForEveryone = { viewModel.deleteMessageForEveryone(it) },
+                                onLoadMoreChatMessages = { viewModel.loadMoreChatMessages() }
                             )
                             is Screen.Wallet -> WalletScreen(
                                 balance = walletBalance,
@@ -883,7 +905,8 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                 },
                                 onVerifyCreator = { id, verified -> viewModel.verifyCreator(id, verified) },
                                 measuredDelayMs = measuredDelayMs,
-                                onNavigateToSettings = { viewModel.navigateTo(Screen.Settings) }
+                                onNavigateToSettings = { viewModel.navigateTo(Screen.Settings) },
+                                securityLogs = securityLogs
                             )
                             is Screen.Settings -> SettingsScreen(
                                 viewModel = viewModel,
@@ -982,7 +1005,8 @@ fun FeedScreen(
     onPublishPost: (String, Creator?, String?) -> Unit,
     onDiscoverCreators: () -> Unit,
     onCreatorClick: (String) -> Unit,
-    onVideoClick: (Post) -> Unit = {}
+    onVideoClick: (Post) -> Unit = {},
+    onLoadMorePosts: () -> Unit = {}
 ) {
     var showStoryStudio by remember { mutableStateOf(false) }
     var showNewPostDialog by remember { mutableStateOf(false) }
@@ -1813,6 +1837,37 @@ fun FeedScreen(
                         }
                     }
                 }
+
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Button(
+                            onClick = { onLoadMorePosts() },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0x3300FF88)),
+                            border = BorderStroke(1.dp, RazorTeal.copy(0.4f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.testTag("load_more_posts_btn")
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = RazorTeal,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text("LOAD MORE CREATOR FEEDS", color = RazorTeal, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.5.sp)
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -2005,19 +2060,7 @@ fun NewPostDialog(
         var simFileSizeMB by remember { mutableStateOf("3.5") }
 
         // --- NEW INSTAGRAM-STYLE & ADVANCED FEATURES STATES ---
-        var activeTab by remember { mutableStateOf("media") } // Only media tab is active
         var selectedFilter by remember { mutableStateOf("Normal") }
-        var selectedLocation by remember { mutableStateOf("") }
-        var selectedMusic by remember { mutableStateOf("") }
-        var selectedVisibilityTier by remember { mutableStateOf("Everyone") }
-        var taggedCreators by remember { mutableStateOf<List<Creator>>(emptyList()) }
-        var selectedPosterTheme by remember { mutableStateOf("Cyber Neon") }
-        
-        // Modal & Toggle state flags
-        var showTagSelector by remember { mutableStateOf(false) }
-        var showLocationSelector by remember { mutableStateOf(false) }
-        var showMusicSelector by remember { mutableStateOf(false) }
-        var isPlaygroundExpanded by remember { mutableStateOf(false) }
 
         // Local client-side validator helper
         fun validateFile(
@@ -2363,194 +2406,105 @@ fun NewPostDialog(
                             .border(1.2.dp, RazorTeal.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
                             .background(Color(0xFF06030F))
                     ) {
-                        if (activeTab == "poster") {
-                            // Render a stunning stylized typographic canvas quote poster
-                            val selectedBrush = posterThemes.find { it.first == selectedPosterTheme }?.second ?: posterThemes[0].second
-                            
-                            Box(
+                        // Render user media preview (camera snaps, gallery pics, simulated streams)
+                        if (attachedMediaType == "attached_image") {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                AsyncImage(
+                                    model = realAttachedUri?.toString() ?: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800",
+                                    contentDescription = "Selected media",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    colorFilter = if (filterMatrix != null) androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(filterMatrix)) else null
+                                )
+                                
+                                // Visual filter badge
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(10.dp)
+                                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Filter: $selectedFilter", color = RazorTeal, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        } else if (attachedMediaType == "attached_audio") {
+                            // Pulse waves
+                            Column(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .background(selectedBrush)
+                                    .background(Color(0xFF1F163D))
                                     .padding(24.dp),
-                                contentAlignment = Alignment.Center
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                // Background geometric canvas decor
-                                Canvas(modifier = Modifier.fillMaxSize()) {
-                                    drawCircle(
-                                        color = Color.White.copy(alpha = 0.08f),
-                                        radius = size.minDimension / 3,
-                                        center = center
-                                    )
-                                    drawLine(
-                                        color = Color.White.copy(alpha = 0.05f),
-                                        start = Offset(0f, 0f),
-                                        end = Offset(size.width, size.height),
-                                        strokeWidth = 2f
-                                    )
-                                    drawLine(
-                                        color = Color.White.copy(alpha = 0.05f),
-                                        start = Offset(size.width, 0f),
-                                        end = Offset(0f, size.height),
-                                        strokeWidth = 2f
-                                    )
-                                }
-
-                                // Centered Poster Typography Content
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(48.dp))
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Text("VOICE TELEMETRY AUDIO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(0.8f).height(40.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = "CREATOR LABS • DROP",
-                                        color = Color.White.copy(alpha = 0.6f),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Black,
-                                        letterSpacing = 2.5.sp,
-                                        modifier = Modifier.padding(bottom = 12.dp)
-                                    )
-                                    
-                                    Box(
-                                        modifier = Modifier
-                                            .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
-                                            .background(Color.Black.copy(alpha = 0.35f))
-                                            .padding(horizontal = 14.dp, vertical = 18.dp)
-                                            .fillMaxWidth(0.92f)
-                                    ) {
-                                        Text(
-                                            text = captionText.ifBlank { "WRITE SOMETHING\nTO GENERATE POSTER" },
-                                            color = Color.White,
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Black,
-                                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                                            textAlign = TextAlign.Center,
-                                            lineHeight = 24.sp,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.height(14.dp))
-                                    Text(
-                                        text = "@${selectedCreator?.handle ?: "me"}",
-                                        color = Color.White,
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
-                                    )
-                                    
-                                    if (selectedLocation.isNotBlank()) {
-                                        Text(
-                                            text = "📍 $selectedLocation",
-                                            color = RazorTeal,
-                                            fontSize = 9.5.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(top = 4.dp)
+                                    listOf(20, 45, 15, 60, 30, 80, 50, 10, 70, 35, 55, 25).forEach { barH ->
+                                        Box(
+                                            modifier = Modifier
+                                                .width(4.dp)
+                                                .height(barH.dp)
+                                                .clip(CircleShape)
+                                                .background(RazorTeal)
                                         )
                                     }
                                 }
                             }
+                        } else if (attachedMediaType == "attached_video") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800",
+                                    contentDescription = "Video placeholder",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                    alpha = 0.6f
+                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = InstaPink, modifier = Modifier.size(54.dp))
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("REEL STREAM CAPTURED", color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
+                                }
+                            }
                         } else {
-                            // Render user media preview (camera snaps, gallery pics, simulated streams)
-                            if (attachedMediaType == "attached_image") {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    AsyncImage(
-                                        model = realAttachedUri?.toString() ?: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=800",
-                                        contentDescription = "Selected media",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                        colorFilter = if (filterMatrix != null) androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(filterMatrix)) else null
-                                    )
-                                    
-                                    // Visual filter badge
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.TopStart)
-                                            .padding(10.dp)
-                                            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text("Filter: $selectedFilter", color = RazorTeal, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            } else if (attachedMediaType == "attached_audio") {
-                                // Pulse waves
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color(0xFF1F163D))
-                                        .padding(24.dp),
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally
+                            // Empty state placeholder with interactive selection buttons
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(20.dp),
+                                verticalArrangement = Arrangement.Center,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(imageVector = Icons.Default.Collections, contentDescription = null, tint = RazorBlue, modifier = Modifier.size(40.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text("No hardware media attached yet", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                Text("Use sandbox simulations or hardware picker below to attach.", color = GrayText, fontSize = 11.sp, textAlign = TextAlign.Center)
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Button(
+                                    onClick = { tryAttach("media") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = RazorBlue),
+                                    shape = RoundedCornerShape(8.dp)
                                 ) {
-                                    Icon(imageVector = Icons.Default.MusicNote, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(48.dp))
-                                    Spacer(modifier = Modifier.height(14.dp))
-                                    Text("VOICE TELEMETRY AUDIO", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                                    Spacer(modifier = Modifier.height(16.dp))
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(0.8f).height(40.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        listOf(20, 45, 15, 60, 30, 80, 50, 10, 70, 35, 55, 25).forEach { barH ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .width(4.dp)
-                                                    .height(barH.dp)
-                                                    .clip(CircleShape)
-                                                    .background(RazorTeal)
-                                            )
-                                        }
-                                    }
-                                }
-                            } else if (attachedMediaType == "attached_video") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(Color.Black),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    AsyncImage(
-                                        model = "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?w=800",
-                                        contentDescription = "Video placeholder",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                        alpha = 0.6f
-                                    )
-                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, tint = InstaPink, modifier = Modifier.size(54.dp))
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text("REEL STREAM CAPTURED", color = Color.White, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp)
-                                    }
-                                }
-                            } else {
-                                // Empty state placeholder with interactive selection buttons
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(20.dp),
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(imageVector = Icons.Default.Collections, contentDescription = null, tint = RazorBlue, modifier = Modifier.size(40.dp))
-                                    Spacer(modifier = Modifier.height(10.dp))
-                                    Text("No hardware media attached yet", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                    Text("Use sandbox simulations or hardware picker below to attach.", color = GrayText, fontSize = 11.sp, textAlign = TextAlign.Center)
-                                    Spacer(modifier = Modifier.height(14.dp))
-                                    Button(
-                                        onClick = { tryAttach("media") },
-                                        colors = ButtonDefaults.buttonColors(containerColor = RazorBlue),
-                                        shape = RoundedCornerShape(8.dp)
-                                    ) {
-                                        Text("Browse Library 📁", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    }
+                                    Text("Browse Library 📁", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                 }
                             }
                         }
                     }
 
                     // 2. INSTAGRAM FILTER CAROUSEL (Show filters when we have attached image in media tab)
-                    if (activeTab == "media" && attachedMediaType == "attached_image") {
+                    if (attachedMediaType == "attached_image") {
                         Column {
                             Text("PHOTO FILTERS", color = RazorTeal, fontSize = 9.5.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
                             Spacer(modifier = Modifier.height(6.dp))
@@ -2610,51 +2564,6 @@ fun NewPostDialog(
                         Spacer(modifier = Modifier.height(2.dp))
                     }
 
-                    // 3. POSTER THEME CAROUSEL (Show themes when we are on poster tab)
-                    if (activeTab == "poster") {
-                        Column {
-                            Text("POSTER THEMES", color = RazorTeal, fontSize = 9.5.sp, fontWeight = FontWeight.Black, letterSpacing = 1.sp)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                items(posterThemes.size) { index ->
-                                    val (themeName, themeBrush) = posterThemes[index]
-                                    val isSelected = selectedPosterTheme == themeName
-                                    Card(
-                                        modifier = Modifier
-                                            .width(86.dp)
-                                            .clickable { selectedPosterTheme = themeName },
-                                        shape = RoundedCornerShape(10.dp),
-                                        colors = CardDefaults.cardColors(containerColor = if (isSelected) RazorTeal.copy(alpha = 0.15f) else Color(0xFF191331)),
-                                        border = BorderStroke(1.2.dp, if (isSelected) RazorTeal else Color.White.copy(alpha = 0.12f))
-                                    ) {
-                                        Column(
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            modifier = Modifier.padding(6.dp)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(40.dp)
-                                                    .clip(RoundedCornerShape(6.dp))
-                                                    .background(themeBrush)
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = themeName,
-                                                color = if (isSelected) RazorTeal else Color.White.copy(alpha = 0.7f),
-                                                fontSize = 8.5.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
                     // 4. COMPOSITION SECTION (Caption input next to small 1:1 image thumbnail)
                     Row(
                         modifier = Modifier
@@ -2672,18 +2581,13 @@ fun NewPostDialog(
                                 .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
                                 .background(Color.DarkGray)
                         ) {
-                            if (activeTab == "poster") {
-                                val selectedBrush = posterThemes.find { it.first == selectedPosterTheme }?.second ?: posterThemes[0].second
-                                Box(modifier = Modifier.fillMaxSize().background(selectedBrush))
-                            } else {
-                                AsyncImage(
-                                    model = realAttachedUri?.toString() ?: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=200",
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                    colorFilter = if (filterMatrix != null) androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(filterMatrix)) else null
-                                )
-                            }
+                            AsyncImage(
+                                model = realAttachedUri?.toString() ?: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=200",
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                colorFilter = if (filterMatrix != null) androidx.compose.ui.graphics.ColorFilter.colorMatrix(androidx.compose.ui.graphics.ColorMatrix(filterMatrix)) else null
+                            )
                         }
 
                         Spacer(modifier = Modifier.width(10.dp))
@@ -2751,6 +2655,133 @@ fun NewPostDialog(
                             }
                         }
                     }
+
+                    // --- HIGH PERFORMANCE MEDIA ATTACHMENT ACTION BAR ---
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black.copy(alpha = 0.3f))
+                            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "ATTACH CREATIVE MEDIA SHOT",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                color = RazorTeal,
+                                letterSpacing = 1.sp
+                            )
+                            if (attachedMediaType != null) {
+                                Text(
+                                    text = "REMOVE ❌",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.Red,
+                                    modifier = Modifier.clickable {
+                                        realAttachedUri = null
+                                        attachedFileName = null
+                                        attachedFileSizeStr = null
+                                        attachedFileMimeType = null
+                                        attachedMediaType = null
+                                        permissionStatusMessage = null
+                                    }
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (attachedMediaType == "attached_image" && realAttachedUri != null) RazorBlue.copy(0.15f) else Color.White.copy(0.04f))
+                                    .border(1.dp, if (attachedMediaType == "attached_image" && realAttachedUri != null) RazorBlue else Color.White.copy(0.08f), RoundedCornerShape(8.dp))
+                                    .clickable { tryAttach("media") }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.Collections, contentDescription = null, tint = RazorBlue, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Library 📁", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (attachedMediaType == "attached_image" && realAttachedUri == null) RazorTeal.copy(0.15f) else Color.White.copy(0.04f))
+                                    .border(1.dp, if (attachedMediaType == "attached_image" && realAttachedUri == null) RazorTeal else Color.White.copy(0.08f), RoundedCornerShape(8.dp))
+                                    .clickable { tryAttach("camera") }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.PhotoCamera, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Camera 📸", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (attachedMediaType == "attached_audio") InstaPink.copy(0.15f) else Color.White.copy(0.04f))
+                                    .border(1.dp, if (attachedMediaType == "attached_audio") InstaPink else Color.White.copy(0.08f), RoundedCornerShape(8.dp))
+                                    .clickable { tryAttach("mic") }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.Mic, contentDescription = null, tint = InstaPink, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Voice 🎙️", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (attachedMediaType == "attached_video") Color.Yellow.copy(0.15f) else Color.White.copy(0.04f))
+                                    .border(1.dp, if (attachedMediaType == "attached_video") Color.Yellow else Color.White.copy(0.08f), RoundedCornerShape(8.dp))
+                                    .clickable { tryAttach("video") }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Icon(imageVector = Icons.Default.PlayCircle, contentDescription = null, tint = Color.Yellow, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Video 📹", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        if (!permissionStatusMessage.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = permissionStatusMessage!!,
+                                color = if (permissionStatusMessage!!.contains("❌")) Color.Red else RazorTeal,
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     // 5. POST AS AUTHOR SELECTOR
                     Column(modifier = Modifier.fillMaxWidth()) {
@@ -6443,7 +6474,8 @@ fun ChatScreen(
     onMarkAsSeen: (String) -> Unit,
     initialRecipient: String? = null,
     onDeleteMessageForMe: (ChatMessage) -> Unit = {},
-    onDeleteMessageForEveryone: (ChatMessage) -> Unit = {}
+    onDeleteMessageForEveryone: (ChatMessage) -> Unit = {},
+    onLoadMoreChatMessages: () -> Unit = {}
 ) {
     var activeThreadRecipient by remember(initialRecipient) { mutableStateOf<String?>(initialRecipient) }
     var inputMessage by remember { mutableStateOf("") }
@@ -6833,10 +6865,16 @@ fun ChatScreen(
                 if (threadMsgs.isNotEmpty()) {
                     val lastMsg = threadMsgs.last()
                     val contentDisclosed = if (lastMsg.isEncrypted) {
-                        try {
-                            val decoded = android.util.Base64.decode(lastMsg.encryptedContent, android.util.Base64.DEFAULT)
-                            String(decoded, Charsets.UTF_8).trim()
-                        } catch (e: Exception) {
+                        val cleaned = lastMsg.encryptedContent.trim()
+                        val isBase64Pattern = cleaned.isNotEmpty() && !cleaned.contains(" ") && cleaned.all { it.isLetterOrDigit() || it == '+' || it == '/' || it == '=' }
+                        if (isBase64Pattern && cleaned != "This message was deleted") {
+                            try {
+                                val decoded = android.util.Base64.decode(cleaned, android.util.Base64.DEFAULT)
+                                String(decoded, Charsets.UTF_8).trim()
+                            } catch (e: Exception) {
+                                lastMsg.encryptedContent
+                            }
+                        } else {
                             lastMsg.encryptedContent
                         }
                     } else {
@@ -7063,6 +7101,29 @@ fun ChatScreen(
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "LOAD OLDER MESSAGES",
+                            color = RazorTeal,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x1A00FF88))
+                                .border(1.dp, RazorTeal.copy(0.3f), RoundedCornerShape(8.dp))
+                                .clickable { onLoadMoreChatMessages() }
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .testTag("load_more_chats_btn")
+                        )
+                    }
+                }
                 if (recipientName == "Tokyo Trip") {
                     item {
                         ChatBubble(
@@ -7086,9 +7147,15 @@ fun ChatScreen(
                     val isMe = msg.senderName == "You"
                     // Transparent decryption under the hood
                     val contentDisclosed = if (msg.isEncrypted) {
-                        try {
-                            String(android.util.Base64.decode(msg.encryptedContent, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
-                        } catch (e: Exception) {
+                        val cleaned = msg.encryptedContent.trim()
+                        val isBase64Pattern = cleaned.isNotEmpty() && !cleaned.contains(" ") && cleaned.all { it.isLetterOrDigit() || it == '+' || it == '/' || it == '=' }
+                        if (isBase64Pattern && cleaned != "This message was deleted") {
+                            try {
+                                String(android.util.Base64.decode(cleaned, android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
+                            } catch (e: Exception) {
+                                msg.encryptedContent
+                            }
+                        } else {
                             msg.encryptedContent
                         }
                     } else {
@@ -7981,7 +8048,8 @@ fun WalletScreen(
     onVerifyCreator: (String, Boolean) -> Unit = { _,_ -> },
     onAddMockTransaction: (String, Double, String) -> Unit = { _,_,_ -> },
     measuredDelayMs: Long = 0L,
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    securityLogs: List<String> = emptyList()
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var isBalanceVisible by remember { mutableStateOf(true) }
@@ -9265,6 +9333,10 @@ fun WalletScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                val combinedLogs = remember(threatLogs, securityLogs) {
+                    threatLogs + securityLogs
+                }
+
                 // Terminal Shell Logs console
                 Text("SECURE FIREWALL EVENT LOGS:", color = RazorBlue, fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 Spacer(modifier = Modifier.height(6.dp))
@@ -9279,10 +9351,11 @@ fun WalletScreen(
                         modifier = Modifier.padding(10.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        items(threatLogs.size) { logIdx ->
+                        items(combinedLogs.size) { logIdx ->
+                            val logText = combinedLogs[logIdx]
                             Text(
-                                text = ">>> " + threatLogs[logIdx],
-                                color = if (threatLogs[logIdx].contains("[BLOCKED]")) Color.Red else if (threatLogs[logIdx].contains("[CONFIG]")) RazorTeal else Color.Green.copy(0.8f),
+                                text = ">>> " + logText,
+                                color = if (logText.contains("[BLOCKED]") || logText.contains("🚨")) Color.Red else if (logText.contains("[CONFIG]") || logText.contains("🔐") || logText.contains("🔑")) RazorTeal else Color.Green.copy(0.8f),
                                 fontFamily = FontFamily.Monospace,
                                 fontSize = 9.sp
                             )
@@ -18829,6 +18902,17 @@ fun SettingsScreen(
     var expandedSection by remember { mutableStateOf<String?>(null) } // "privacy", "notifications", "security", "permissions", "twoStep"
 
     // 2FA Setup walkthrough states
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    var codeCopiedToastMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(codeCopiedToastMessage) {
+        if (codeCopiedToastMessage != null) {
+            kotlinx.coroutines.delay(2000)
+            codeCopiedToastMessage = null
+        }
+    }
+
     var twoStepSetupStep by remember { mutableStateOf(0) } // 0: Select Method, 1: Verify PIN, 2: Show Backup Codes
     var selectedMethodOpt by remember { mutableStateOf("Authenticator App") }
     var enteredPin by remember { mutableStateOf("") }
@@ -19088,32 +19172,53 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
                             SettingsSwitchRow(
-                                title = "External Bank Sync Guard",
-                                subtitle = "Blocks malicious background sync queries from capturing wallet status.",
-                                checked = extBankSyncGuard,
-                                onCheckedChange = { viewModel.setExtBankSyncGuard(it) }
+                                title = "Zero Trust Server Wall Protection",
+                                subtitle = "Forces real-time API token rotation against unauthorized request scripts.",
+                                checked = extZeroTrustRotator,
+                                onCheckedChange = { viewModel.setExtZeroTrustRotator(it) }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
-                                title = "Anti-Phishing VPA Filter",
-                                subtitle = "Actively cross-references payment targets with threat indices.",
-                                checked = extAntiPhishingFilter,
-                                onCheckedChange = { viewModel.setExtAntiPhishingFilter(it) }
+                                title = "Encrypted Payload Rotator",
+                                subtitle = "Encrypts network transmission bodies dynamically.",
+                                checked = extPayloadEncryption,
+                                onCheckedChange = { viewModel.setExtPayloadEncryption(it) }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
-                                title = "Dynamic Overlay Blocker",
-                                subtitle = "Hard-blocks unauthorized overlays to shield wallet inputs.",
-                                checked = extOverlayBlocker,
-                                onCheckedChange = { viewModel.setExtOverlayBlocker(it) }
+                                title = "Anti-Hacker Memory Guard",
+                                subtitle = "Actively blocks rogue memory intrusion / buffer overflow attempts.",
+                                checked = extAntiHackerGuard,
+                                onCheckedChange = { viewModel.setExtAntiHackerGuard(it) }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
-                                title = "Malware Sandbox Isolation",
-                                subtitle = "Isolates runtime assets from device memory bleed vectors.",
-                                checked = extMalwareIsolation,
-                                onCheckedChange = { viewModel.setExtMalwareIsolation(it) }
+                                title = "Biometric App Startup Lock",
+                                subtitle = "Enforces device biometric authentication on application boot.",
+                                checked = extBiometricStartupLock,
+                                onCheckedChange = { viewModel.setExtBiometricStartupLock(it) }
                             )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Verified Security Email", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    val currentEmail by viewModel.userEmail.collectAsStateWithLifecycle()
+                                    Text(if (currentEmail.isBlank()) "No email verified" else currentEmail, color = RazorTeal, fontSize = 10.sp)
+                                }
+                                Button(
+                                    onClick = { viewModel.resetEmailVerification() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(0.15f), contentColor = Color.Red),
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    border = BorderStroke(1.dp, Color.Red.copy(0.3f))
+                                ) {
+                                    Text("Reset Gateway 🔒", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         }
                     }
                 }
@@ -19191,7 +19296,6 @@ fun SettingsScreen(
                                         
                                         val methods = listOf(
                                             "Authenticator App" to "Highly secure cryptographic code generated by Google Authenticator.",
-                                            "SMS Telemetry Gate" to "Secure SMS telemetry dispatch to registered sim node.",
                                             "Web3 Physical Key" to "Hardware cold-storage security signature verification."
                                         )
                                         
@@ -19252,12 +19356,66 @@ fun SettingsScreen(
                                                 .padding(12.dp)
                                         ) {
                                             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                                val seedCode = "SZ3X - 9K2P - W7Y2 - L5B1"
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(6.dp))
+                                                        .background(Color(0xFFFF9800).copy(0.12f))
+                                                        .border(1.dp, Color(0xFFFF9800).copy(0.4f), RoundedCornerShape(6.dp))
+                                                        .clickable {
+                                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(seedCode))
+                                                            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                                            codeCopiedToastMessage = "Seed code copied! 📋"
+                                                        }
+                                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ContentCopy,
+                                                        contentDescription = "Copy code",
+                                                        tint = Color(0xFFFF9800),
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text(
+                                                        text = seedCode,
+                                                        color = Color(0xFFFF9800),
+                                                        fontFamily = FontFamily.Monospace,
+                                                        fontWeight = FontWeight.ExtraBold,
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
+                                                Spacer(modifier = Modifier.height(10.dp))
+                                                Button(
+                                                    onClick = {
+                                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(seedCode))
+                                                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                                        codeCopiedToastMessage = "Seed code copied! 📋"
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.height(36.dp).testTag("copy_2fa_btn")
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.ContentCopy,
+                                                            contentDescription = "Copy to Clipboard",
+                                                            tint = Color.Black,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Text("Copy to Clipboard", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.height(6.dp))
                                                 Text(
-                                                    text = "SZ3X - 9K2P - W7Y2 - L5B1",
-                                                    color = RazorBlue,
-                                                    fontFamily = FontFamily.Monospace,
-                                                    fontWeight = FontWeight.ExtraBold,
-                                                    fontSize = 14.sp
+                                                    text = if (codeCopiedToastMessage != null) codeCopiedToastMessage!! else "Click button above to copy",
+                                                    color = if (codeCopiedToastMessage != null) RazorTeal else Color(0xFFFF9800).copy(alpha = 0.8f),
+                                                    fontSize = 10.sp,
+                                                    textAlign = TextAlign.Center,
+                                                    fontWeight = FontWeight.Bold
                                                 )
                                                 Spacer(modifier = Modifier.height(4.dp))
                                                 Text(
@@ -19777,5 +19935,206 @@ fun PermissionRow(label: String, granted: Boolean) {
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace
         )
+    }
+}
+
+@Composable
+fun MandatoryEmailVerificationScreen(
+    emailOtpSent: Boolean,
+    isOtpVerifying: Boolean,
+    otpErrorMessage: String?,
+    userEmail: String,
+    onSendOtp: (String) -> Unit,
+    onVerifyOtp: (String) -> Boolean
+) {
+    var emailInput by remember { mutableStateOf(userEmail) }
+    var otpInput by remember { mutableStateOf("") }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F0B21)),
+        contentAlignment = Alignment.Center
+    ) {
+        // Decorative grid lines
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val gridSpacing = 40.dp.toPx()
+            for (x in 0..size.width.toInt() step gridSpacing.toInt()) {
+                drawLine(
+                    color = Color(0xFF1B1437).copy(alpha = 0.3f),
+                    start = androidx.compose.ui.geometry.Offset(x.toFloat(), 0f),
+                    end = androidx.compose.ui.geometry.Offset(x.toFloat(), size.height),
+                    strokeWidth = 1f
+                )
+            }
+            for (y in 0..size.height.toInt() step gridSpacing.toInt()) {
+                drawLine(
+                    color = Color(0xFF1B1437).copy(alpha = 0.3f),
+                    start = androidx.compose.ui.geometry.Offset(0f, y.toFloat()),
+                    end = androidx.compose.ui.geometry.Offset(size.width, y.toFloat()),
+                    strokeWidth = 1f
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161135)),
+            border = BorderStroke(1.5.dp, RazorTeal.copy(alpha = 0.7f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Cyber security badge
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(RazorTeal.copy(alpha = 0.15f))
+                        .border(1.5.dp, RazorTeal, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Security,
+                        contentDescription = "Security Gateway",
+                        tint = RazorTeal,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "MANDATORY SECURITY GATEWAY",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
+                )
+
+                Text(
+                    text = "Verify your email to establish an authenticated secure user session",
+                    color = Color.LightGray,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                if (!emailOtpSent) {
+                    // Step 1: Input Email
+                    OutlinedTextField(
+                        value = emailInput,
+                        onValueChange = { emailInput = it },
+                        label = { Text("Secure Email Address", color = RazorTeal) },
+                        textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
+                        placeholder = { Text("user@securedomain.com", color = Color.Gray) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = RazorTeal,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                            unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (otpErrorMessage != null) {
+                        Text(
+                            text = otpErrorMessage,
+                            color = Color.Red,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    Button(
+                        onClick = { onSendOtp(emailInput) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                        shape = RoundedCornerShape(12.dp),
+                        enabled = !isOtpVerifying
+                    ) {
+                        if (isOtpVerifying) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
+                        } else {
+                            Text("Request Authorization Code 📡", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else {
+                    // Step 2: Input OTP
+                    Text(
+                        text = "Authentication Code sent to\n$emailInput",
+                        color = RazorTeal,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = otpInput,
+                        onValueChange = { if (it.length <= 6) otpInput = it },
+                        label = { Text("6-Digit OTP Code", color = RazorTeal) },
+                        textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+                        placeholder = { Text("******", color = Color.Gray) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = RazorTeal,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                            unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (otpErrorMessage != null) {
+                        Text(
+                            text = otpErrorMessage,
+                            color = Color.Red,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    Button(
+                        onClick = { onVerifyOtp(otpInput) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Verify & Authenticate Session 🔑", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    TextButton(
+                        onClick = { onSendOtp(emailInput) }
+                    ) {
+                        Text("Resend Code", color = Color.LightGray, fontSize = 12.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
+                    }
+                }
+            }
+        }
     }
 }

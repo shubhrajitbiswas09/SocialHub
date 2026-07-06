@@ -360,7 +360,7 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
                 id = 3,
                 senderName = "Crypto Degens",
                 receiverName = "You",
-                encryptedContent = "QG1paGU6IHNlY3VyZSBrZXkgdXBkYXRlZCBmb3IgdGhlIEVUSEVyZWXVbSBtYWlubmV0IHZhdWx0Lg==", // Base64 for "@mihe: secure key updated..."
+                encryptedContent = "QG1paGU6IHNlY3VyZSBrZXkgdXBkYXRlZCBmb3IgdGhlIEV0aGVyZXVtIG1haW5uZXQgdmF1bHQu", // Base64 for "@mihe: secure key updated..."
                 isEncrypted = true,
                 timestamp = System.currentTimeMillis() - 120000,
                 isSeen = true
