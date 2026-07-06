@@ -1,5 +1,5 @@
 {
-  "name": "Remix: power 1 : SocialHub",
+  "name": "SocialHub",
   "description": "A social monetization hub combining Instagram-style creator feeds with integrated, secure Razorpay-style in-app payments (with coming soon tag), subscription tiers, and encrypted chat.",
   "requestFramePermissions": [],
   "majorCapabilities": [
