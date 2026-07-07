@@ -70,6 +70,16 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
     }
 
     suspend fun fetchFollowedPostsFromFirestore(followedCreatorIds: Set<String>): List<Post> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val sp = context.getSharedPreferences("secure_hub_prefs", Context.MODE_PRIVATE)
+        val lastFetchTime = sp.getLong("last_feed_fetch_time", 0L)
+        val now = System.currentTimeMillis()
+        val cacheDurationMs = 180000L // 3 minutes client-side cache to minimize Firestore reads
+        if (now - lastFetchTime < cacheDurationMs) {
+            android.util.Log.i("SocialHubRepo", "Local caching strategy: Utilizing offline cache to prevent server cost. Cache age: ${(now - lastFetchTime) / 1000}s")
+            val cachedList = dao.getPostsList()
+            return@withContext cachedList.filter { it.creatorId in followedCreatorIds }
+        }
+
         val firestore = getFirestoreSafe() ?: return@withContext emptyList<Post>()
         try {
             kotlinx.coroutines.withTimeoutOrNull(1200L) {
@@ -126,6 +136,7 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
                         }
                     }
                     dao.insertPosts(mergedPosts)
+                    sp.edit().putLong("last_feed_fetch_time", now).apply()
                 }
 
                 fetchedPosts.filter { it.creatorId in followedCreatorIds }

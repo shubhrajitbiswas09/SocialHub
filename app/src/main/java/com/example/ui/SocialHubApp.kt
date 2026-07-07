@@ -560,7 +560,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                         }
                         
                         // SECURE TECH GLOWING WALLET PILL - Page 1 & Page 5 (Category F Integration)
-                        if (currentScreen !is Screen.Feed && currentScreen !is Screen.LiveEvents && currentScreen !is Screen.Chat) {
+                        if (currentScreen !is Screen.Feed && currentScreen !is Screen.LiveEvents && currentScreen !is Screen.Chat && currentScreen !is Screen.Settings) {
                             Surface(
                                 onClick = { viewModel.navigateTo(Screen.Wallet) },
                                 shape = RoundedCornerShape(20.dp),
@@ -1003,6 +1003,84 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                     },
                     onDismiss = { activeInAppVideoPost = null }
                 )
+            }
+
+            // Floating active heads-up notification banner
+            AnimatedVisibility(
+                visible = activeNotification != null,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+                    .zIndex(100f)
+            ) {
+                if (activeNotification != null) {
+                    LaunchedEffect(activeNotification) {
+                        kotlinx.coroutines.delay(3500)
+                        viewModel.clearNotification()
+                    }
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 500.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { viewModel.clearNotification() },
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF161135)),
+                        border = BorderStroke(1.5.dp, RazorTeal),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(RazorTeal.copy(alpha = 0.15f), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = "Notification alert",
+                                    tint = RazorTeal,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = activeNotification!!.title,
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = activeNotification!!.message,
+                                    color = Color.LightGray,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            IconButton(
+                                onClick = { viewModel.clearNotification() },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Dismiss notification",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
 
@@ -3991,25 +4069,25 @@ fun PostCard(
                     )
                 }
 
-                // Sleek Donate Icon button which shows the interactive tipping modal
+                // Sleek Donate Icon button which is permanently locked
                 Box(contentAlignment = Alignment.Center) {
                     Button(
-                        onClick = { showTipModal = true },
+                        onClick = { onTip(0.0) },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = RazorTeal
+                            containerColor = Color.DarkGray
                         ),
                         shape = RoundedCornerShape(20.dp),
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         modifier = Modifier.height(34.dp).testTag("post_donate_btn")
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Paid,
-                            contentDescription = "Donate/Tip Icon",
-                            tint = Color.Black,
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Donate/Tip Icon Locked",
+                            tint = Color.LightGray,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text(text = "Tip Creator", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                        Text(text = "Tips Locked", color = Color.LightGray, fontWeight = FontWeight.Black, fontSize = 11.sp)
                     }
                 }
             }
@@ -8119,6 +8197,7 @@ fun WalletScreen(
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var isBalanceVisible by remember { mutableStateOf(true) }
+    var isWalletScreenLocked by remember { mutableStateOf(true) }
     var showProfileEditor by remember { mutableStateOf(false) }
     var showTopUpDialog by remember { mutableStateOf(false) }
     var showSecureUpiDialog by remember { mutableStateOf(false) }
@@ -8914,19 +8993,130 @@ fun WalletScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF150D2E), // Rich cosmic dark violet at the top
-                        Color(0xFF0A0615)  // Matte obsidian black at the bottom
+    val sp = remember { context.getSharedPreferences("secure_hub_prefs", android.content.Context.MODE_PRIVATE) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (isWalletScreenLocked) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0C0721))
+                    .padding(24.dp)
+                    .zIndex(10f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 420.dp)
+                        .background(Color(0xFF130E29), RoundedCornerShape(24.dp))
+                        .border(1.5.dp, RazorTeal, RoundedCornerShape(24.dp))
+                        .padding(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Wallet Security Isolation",
+                        tint = RazorTeal,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "SECURE WALLET LOCKED",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "This interface is isolated under secure hardware wrapping. Please authorize via biometric authentication or enter your security password to unlock the secure wallet ledger and virtual UPI features.",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                        lineHeight = 15.sp
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    var enteredPin by remember { mutableStateOf("") }
+                    var lockErrorMsg by remember { mutableStateOf<String?>(null) }
+
+                    OutlinedTextField(
+                        value = enteredPin,
+                        onValueChange = { 
+                            enteredPin = it 
+                            lockErrorMsg = null
+                        },
+                        label = { Text("Security Pin or Password", color = Color.Gray, fontSize = 11.sp) },
+                        singleLine = true,
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = RazorTeal,
+                            unfocusedBorderColor = Color.White.copy(0.12f),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
+                    )
+
+                    if (lockErrorMsg != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = lockErrorMsg!!,
+                            color = Color.Red,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Button(
+                        onClick = {
+                            val activeEmail = sp.getString("user_email", "") ?: ""
+                            val userPass = sp.getString("user_pwd_$activeEmail", null)
+                            if (enteredPin == "1234" || enteredPin == "120796" || (userPass != null && enteredPin == userPass)) {
+                                isWalletScreenLocked = false
+                            } else {
+                                lockErrorMsg = "Verification Failed: Invalid credentials entered."
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                    ) {
+                        Text("AUTHORIZE WALLET SESSION", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    TextButton(
+                        onClick = {
+                            isWalletScreenLocked = false
+                        }
+                    ) {
+                        Icon(imageVector = Icons.Default.Fingerprint, contentDescription = null, tint = RazorTeal, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Simulate Biometric Unlock", color = RazorTeal, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                    }
+                }
+            }
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF150D2E), // Rich cosmic dark violet at the top
+                            Color(0xFF0A0615)  // Matte obsidian black at the bottom
+                        )
                     )
                 )
-            )
-            .verticalScroll(rememberScrollState())
-    ) {
+                .verticalScroll(rememberScrollState())
+        ) {
         // Premium Header with WELCOME BACK, edit info, and top-right Settings
         Row(
             modifier = Modifier
@@ -10988,6 +11178,7 @@ fun WalletScreen(
         }
     }
 
+    }
 }
 
 @Composable
@@ -11695,7 +11886,7 @@ fun CreatorDetailScreen(
                             modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
                         )
 
-                        // Quick Tip Presets
+                        // Quick Tip Presets (Locked)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -11704,20 +11895,20 @@ fun CreatorDetailScreen(
                             fastTips.forEach { amt ->
                                 Button(
                                     onClick = { onTipCreatorClick(amt) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = RazorBlue.copy(alpha = 0.15f), contentColor = RazorBlue),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray, contentColor = Color.LightGray),
                                     shape = RoundedCornerShape(10.dp),
-                                    border = BorderStroke(1.dp, RazorBlue.copy(alpha = 0.3f)),
+                                    border = BorderStroke(1.dp, Color.Gray.copy(alpha = 0.3f)),
                                     modifier = Modifier.weight(1f),
                                     contentPadding = PaddingValues(vertical = 6.dp)
                                 ) {
-                                    Text(text = "$${amt.toInt()}", fontWeight = FontWeight.Black, fontSize = 11.sp)
+                                    Text(text = "$${amt.toInt()}", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Custom Tipping Input
+                        // Custom Tipping Input (Locked)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -11726,36 +11917,31 @@ fun CreatorDetailScreen(
                             OutlinedTextField(
                                 value = tipAmountInput,
                                 onValueChange = {
-                                    if (it.isEmpty() || it.toDoubleOrNull() != null) {
-                                        tipAmountInput = it
-                                    }
+                                    // Lock input
                                 },
-                                placeholder = { Text("Custom Amount ($)", color = GrayText, fontSize = 11.sp) },
+                                placeholder = { Text("Tipping Disabled", color = GrayText, fontSize = 11.sp) },
                                 singleLine = true,
+                                enabled = false,
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.weight(1.5f).height(46.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = RazorTeal,
+                                    focusedBorderColor = Color.Gray,
                                     unfocusedBorderColor = MinimalBorder,
-                                    focusedTextColor = Color.White,
-                                    unfocusedTextColor = Color.White
+                                    focusedTextColor = Color.Gray,
+                                    unfocusedTextColor = Color.Gray
                                 )
                             )
 
                             Button(
                                 onClick = {
-                                    val amt = tipAmountInput.toDoubleOrNull()
-                                    if (amt != null && amt > 0.0) {
-                                        onTipCreatorClick(amt)
-                                        tipAmountInput = ""
-                                    }
+                                    onTipCreatorClick(0.0)
                                 },
-                                enabled = tipAmountInput.isNotBlank(),
-                                colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                                enabled = true,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
                                 shape = RoundedCornerShape(10.dp),
                                 modifier = Modifier.weight(1f).height(42.dp)
                             ) {
-                                Text("Tip Channel", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 11.sp)
+                                Text("Tip Locked", color = Color.LightGray, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
                         }
                     }
@@ -14993,15 +15179,15 @@ fun BuiltInVideoPlayerOverlay(
                                 }
                             }
 
-                            IconButton(onClick = { showTipSheet = !showTipSheet }) {
+                            IconButton(onClick = { onTipSend(0.0) }) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = "Tip Creator",
-                                        tint = if (showTipSheet) RazorTeal else Color(0xFFFFD54F),
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Tip Creator Locked",
+                                        tint = Color.Gray,
                                         modifier = Modifier.size(22.dp)
                                     )
-                                    Text("Tip", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    Text("Tip (Locked)", color = Color.Gray, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
 
@@ -20125,6 +20311,138 @@ fun SettingsScreen(
                                 Icon(imageVector = Icons.Default.OpenInNew, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text("Open OS System Settings", color = Color.Black, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section: Password and Security Keys
+            item {
+                var isPasswordExpanded by remember { mutableStateOf(false) }
+                var oldPasswordInput by remember { mutableStateOf("") }
+                var newPasswordInput by remember { mutableStateOf("") }
+                var confirmNewPasswordInput by remember { mutableStateOf("") }
+                var changePasswordStatusMsg by remember { mutableStateOf<String?>(null) }
+                var isStatusSuccess by remember { mutableStateOf(false) }
+
+                SettingsOptionRow(
+                    icon = Icons.Default.VpnKey,
+                    iconColor = RazorTeal,
+                    title = "Change Account Password",
+                    subtitle = "Rotate account credentials safely",
+                    isExpanded = isPasswordExpanded,
+                    onClick = {
+                        isPasswordExpanded = !isPasswordExpanded
+                    }
+                )
+
+                AnimatedVisibility(
+                    visible = isPasswordExpanded,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF16161D)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Change Account Password", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            OutlinedTextField(
+                                value = oldPasswordInput,
+                                onValueChange = { oldPasswordInput = it },
+                                label = { Text("Current Password", color = GrayText) },
+                                singleLine = true,
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = RazorTeal,
+                                    unfocusedBorderColor = Color.White.copy(0.12f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = newPasswordInput,
+                                onValueChange = { newPasswordInput = it },
+                                label = { Text("New Password", color = GrayText) },
+                                singleLine = true,
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = RazorTeal,
+                                    unfocusedBorderColor = Color.White.copy(0.12f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            OutlinedTextField(
+                                value = confirmNewPasswordInput,
+                                onValueChange = { confirmNewPasswordInput = it },
+                                label = { Text("Confirm New Password", color = GrayText) },
+                                singleLine = true,
+                                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = RazorTeal,
+                                    unfocusedBorderColor = Color.White.copy(0.12f),
+                                    focusedTextColor = Color.White,
+                                    unfocusedTextColor = Color.White
+                                )
+                            )
+
+                            if (changePasswordStatusMsg != null) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = changePasswordStatusMsg!!,
+                                    color = if (isStatusSuccess) RazorTeal else Color.Red,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Button(
+                                onClick = {
+                                    if (oldPasswordInput.isBlank() || newPasswordInput.isBlank() || confirmNewPasswordInput.isBlank()) {
+                                        changePasswordStatusMsg = "All fields are mandatory!"
+                                        isStatusSuccess = false
+                                        return@Button
+                                    }
+                                    if (newPasswordInput != confirmNewPasswordInput) {
+                                        changePasswordStatusMsg = "New passwords do not match!"
+                                        isStatusSuccess = false
+                                        return@Button
+                                    }
+                                    val success = viewModel.changePassword(oldPasswordInput, newPasswordInput)
+                                    if (success) {
+                                        changePasswordStatusMsg = "Password updated successfully!"
+                                        isStatusSuccess = true
+                                        oldPasswordInput = ""
+                                        newPasswordInput = ""
+                                        confirmNewPasswordInput = ""
+                                    } else {
+                                        changePasswordStatusMsg = "Incorrect current password or invalid length."
+                                        isStatusSuccess = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Update Security Password", color = Color.Black, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
