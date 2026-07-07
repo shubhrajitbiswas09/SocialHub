@@ -303,7 +303,20 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
             otpErrorMessage = otpErrorMessage,
             userEmail = userEmail,
             onSendOtp = { viewModel.sendEmailOtp(it) },
-            onVerifyOtp = { viewModel.verifyEmailOtp(it) }
+            onVerifyOtp = { viewModel.verifyEmailOtp(it) },
+            onLogout = { viewModel.logoutUser() }
+        )
+        return
+    }
+
+    val isAppUnlocked by viewModel.isAppUnlocked.collectAsStateWithLifecycle()
+    val extBiometricStartupLock by viewModel.extBiometricStartupLock.collectAsStateWithLifecycle()
+
+    if (extBiometricStartupLock && !isAppUnlocked) {
+        AppLockScreen(
+            onUnlockWithPin = { viewModel.unlockApp(it) },
+            onUnlockWithBiometric = { viewModel.triggerBiometricMockUnlock() },
+            onLogout = { viewModel.logoutUser() }
         )
         return
     }
@@ -426,10 +439,27 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
         }
     }
 
+    val hasBackstackTopLevel by viewModel.canGoBack.collectAsStateWithLifecycle()
+    androidx.activity.compose.BackHandler(enabled = hasBackstackTopLevel) {
+        viewModel.navigateBack()
+    }
+
     Scaffold(
         topBar = {
             if (currentScreen !is Screen.Wallet) {
+                val hasBackstack by viewModel.canGoBack.collectAsStateWithLifecycle()
                 TopAppBar(
+                    navigationIcon = {
+                        if (hasBackstack) {
+                            IconButton(onClick = { viewModel.navigateBack() }) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowBack,
+                                    contentDescription = "Back",
+                                    tint = MaterialTheme.colorScheme.onBackground
+                                )
+                            }
+                        }
+                    },
                     title = {
                         if (isHeaderSearchActive) {
                             OutlinedTextField(
@@ -622,7 +652,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                 ) {
                     NavigationBarItem(
                         selected = currentScreen is Screen.Feed,
-                        onClick = { viewModel.navigateTo(Screen.Feed) },
+                        onClick = { viewModel.navigateTo(Screen.Feed, clearStack = true) },
                         icon = {
                             BubbleEffectContainer(isSelected = currentScreen is Screen.Feed) {
                                 Icon(imageVector = if (currentScreen is Screen.Feed) Icons.Filled.Home else Icons.Outlined.Home, contentDescription = "Feed")
@@ -637,7 +667,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                     )
                     NavigationBarItem(
                         selected = currentScreen is Screen.LiveEvents,
-                        onClick = { viewModel.navigateTo(Screen.LiveEvents) },
+                        onClick = { viewModel.navigateTo(Screen.LiveEvents, clearStack = true) },
                         icon = {
                             BubbleEffectContainer(isSelected = currentScreen is Screen.LiveEvents) {
                                 Icon(imageVector = if (currentScreen is Screen.LiveEvents) Icons.Filled.ShoppingCart else Icons.Outlined.ShoppingCart, contentDescription = "Marketplace")
@@ -652,7 +682,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                     )
                     NavigationBarItem(
                         selected = currentScreen is Screen.Chat,
-                        onClick = { viewModel.navigateTo(Screen.Chat()) },
+                        onClick = { viewModel.navigateTo(Screen.Chat(), clearStack = true) },
                         icon = {
                             BubbleEffectContainer(isSelected = currentScreen is Screen.Chat) {
                                 Icon(imageVector = if (currentScreen is Screen.Chat) Icons.Filled.Mail else Icons.Outlined.Mail, contentDescription = "Secure Chats")
@@ -667,7 +697,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                     )
                     NavigationBarItem(
                         selected = currentScreen is Screen.Wallet,
-                        onClick = { viewModel.navigateTo(Screen.Wallet) },
+                        onClick = { viewModel.navigateTo(Screen.Wallet, clearStack = true) },
                         icon = {
                             BubbleEffectContainer(isSelected = currentScreen is Screen.Wallet) {
                                 Icon(imageVector = if (currentScreen is Screen.Wallet) Icons.Filled.Person else Icons.Outlined.Person, contentDescription = "Profile")
@@ -800,7 +830,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                                 viewModel.navigateTo(Screen.Chat(creator.name))
                                             },
                                             onLikePost = { viewModel.likePost(it) },
-                                            onBack = { viewModel.navigateTo(Screen.Creators) },
+                                            onBack = { viewModel.navigateBack() },
                                             onVerifyToggle = { isVerified ->
                                                 viewModel.verifyCreator(creator.id, isVerified)
                                             },
@@ -842,7 +872,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                 if (match != null) {
                                     ProductDetailScreen(
                                         product = match,
-                                        onBack = { viewModel.navigateTo(Screen.LiveEvents) },
+                                        onBack = { viewModel.navigateBack() },
                                         onPurchase = {
                                             viewModel.triggerPostTip(
                                                 Post(
@@ -923,11 +953,12 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                 onVerifyCreator = { id, verified -> viewModel.verifyCreator(id, verified) },
                                 measuredDelayMs = measuredDelayMs,
                                 onNavigateToSettings = { viewModel.navigateTo(Screen.Settings) },
-                                securityLogs = securityLogs
+                                securityLogs = securityLogs,
+                                onBack = { viewModel.navigateBack() }
                             )
                             is Screen.Settings -> SettingsScreen(
                                 viewModel = viewModel,
-                                onBack = { viewModel.navigateTo(Screen.Wallet) }
+                                onBack = { viewModel.navigateBack() }
                             )
                         }
                     }
@@ -6509,6 +6540,9 @@ fun ChatScreen(
     onLoadMoreChatMessages: () -> Unit = {}
 ) {
     var activeThreadRecipient by remember(initialRecipient) { mutableStateOf<String?>(initialRecipient) }
+    androidx.activity.compose.BackHandler(enabled = activeThreadRecipient != null) {
+        activeThreadRecipient = null
+    }
     var inputMessage by remember { mutableStateOf("") }
     var chatSearchQuery by remember { mutableStateOf("") }
     var selectedCategoryTab by remember { mutableStateOf("All") } // "All", "Creators", "Followers"
@@ -8080,7 +8114,8 @@ fun WalletScreen(
     onAddMockTransaction: (String, Double, String) -> Unit = { _,_,_ -> },
     measuredDelayMs: Long = 0L,
     onNavigateToSettings: () -> Unit = {},
-    securityLogs: List<String> = emptyList()
+    securityLogs: List<String> = emptyList(),
+    onBack: (() -> Unit)? = null
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var isBalanceVisible by remember { mutableStateOf(true) }
@@ -8101,6 +8136,7 @@ fun WalletScreen(
     var extAntiPhishingFilter by remember { mutableStateOf(true) }
     var extOverlayBlocker by remember { mutableStateOf(true) }
     var extMalwareIsolation by remember { mutableStateOf(true) }
+    var pendingWalletToggleSetting by remember { mutableStateOf<PendingToggle?>(null) }
     
     // Interactive Threat Simulator & Log Stream
     var threatLogs by remember { mutableStateOf(listOf(
@@ -8273,6 +8309,49 @@ fun WalletScreen(
                 sizeErrorMessage = null
             }
         }
+    }
+
+    if (pendingWalletToggleSetting != null) {
+        val pending = pendingWalletToggleSetting!!
+        AlertDialog(
+            onDismissRequest = { pendingWalletToggleSetting = null },
+            containerColor = Color(0xFF161135),
+            titleContentColor = Color.White,
+            textContentColor = Color.LightGray,
+            title = {
+                Text(
+                    text = "CONFIRM SECURITY OPTION",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = RazorTeal
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to ${if (pending.currentValue) "DISABLE" else "ENABLE"} the option: '${pending.title}'?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pending.onConfirm(!pending.currentValue)
+                        pendingWalletToggleSetting = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Confirm", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pendingWalletToggleSetting = null }
+                ) {
+                    Text("Cancel", color = Color.Gray, fontWeight = FontWeight.Medium)
+                }
+            }
+        )
     }
 
     if (showProfileEditor) {
@@ -8621,14 +8700,18 @@ fun WalletScreen(
                         title = "Private Creator Account",
                         subtitle = "Restricts profile stats and follower requests to approved users only",
                         checked = isPrivateAccount,
-                        onCheckedChange = { isPrivateAccount = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Private Creator Account", isPrivateAccount) { isPrivateAccount = it }
+                        }
                     )
                     
                     SecurityToggleRow(
                         title = "Incognito Profile Search",
                         subtitle = "Prevents global search indexing and crawling of your page",
                         checked = isIncognitoSearch,
-                        onCheckedChange = { isIncognitoSearch = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Incognito Profile Search", isIncognitoSearch) { isIncognitoSearch = it }
+                        }
                     )
                     
                     Spacer(modifier = Modifier.height(24.dp))
@@ -8683,14 +8766,18 @@ fun WalletScreen(
                         title = "Push Alerts on Wallet Activity",
                         subtitle = "Receive dynamic OS notifications when alerts or dynamic actions are triggered",
                         checked = alertOnWalletActivity,
-                        onCheckedChange = { alertOnWalletActivity = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Push Alerts on Wallet Activity", alertOnWalletActivity) { alertOnWalletActivity = it }
+                        }
                     )
                     
                     SecurityToggleRow(
                         title = "Creator Live-Stream Alerts",
                         subtitle = "Fires priority banners immediately when tracked partners go live",
                         checked = alertOnLiveStreams,
-                        onCheckedChange = { alertOnLiveStreams = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Creator Live-Stream Alerts", alertOnLiveStreams) { alertOnLiveStreams = it }
+                        }
                     )
                     
                     Spacer(modifier = Modifier.height(24.dp))
@@ -8749,28 +8836,36 @@ fun WalletScreen(
                         title = "Bank Sync Shield",
                         subtitle = "Prevents screen scrapers from reading banking data",
                         checked = extBankSyncGuard,
-                        onCheckedChange = { extBankSyncGuard = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Bank Sync Shield", extBankSyncGuard) { extBankSyncGuard = it }
+                        }
                     )
                     
                     SecurityToggleRow(
                         title = "Anti-Phishing Filter",
                         subtitle = "Validates dynamic payment routers for spoof links",
                         checked = extAntiPhishingFilter,
-                        onCheckedChange = { extAntiPhishingFilter = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Anti-Phishing Filter", extAntiPhishingFilter) { extAntiPhishingFilter = it }
+                        }
                     )
                     
                     SecurityToggleRow(
                         title = "Overlay Blocker",
                         subtitle = "Prevents touchjacking and invisible window overlays",
                         checked = extOverlayBlocker,
-                        onCheckedChange = { extOverlayBlocker = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Overlay Blocker", extOverlayBlocker) { extOverlayBlocker = it }
+                        }
                     )
                     
                     SecurityToggleRow(
                         title = "Malware Isolation",
                         subtitle = "Runs untrusted third-party apps in a sandbox environment",
                         checked = extMalwareIsolation,
-                        onCheckedChange = { extMalwareIsolation = it }
+                        onCheckedChange = { newValue ->
+                            pendingWalletToggleSetting = PendingToggle("Malware Isolation", extMalwareIsolation) { extMalwareIsolation = it }
+                        }
                     )
                     
                     Spacer(modifier = Modifier.height(16.dp))
@@ -8839,6 +8934,23 @@ fun WalletScreen(
                 .padding(start = 16.dp, end = 16.dp, top = 20.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            if (onBack != null) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .padding(end = 12.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.1f))
+                        .size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
             // Circle avatar with green/cyan neon glow border
             Box(
                 modifier = Modifier
@@ -9277,8 +9389,10 @@ fun WalletScreen(
                     Switch(
                         checked = extBankSyncGuard,
                         onCheckedChange = { checked ->
-                            extBankSyncGuard = checked
-                            threatLogs = threatLogs + "[CONFIG] External Bank Sync Guard set to ${if (checked) "ENABLED" else "DISABLED"}"
+                            pendingWalletToggleSetting = PendingToggle("External Bank Sync Guard", extBankSyncGuard) { newValue ->
+                                extBankSyncGuard = newValue
+                                threatLogs = threatLogs + "[CONFIG] External Bank Sync Guard set to ${if (newValue) "ENABLED" else "DISABLED"}"
+                            }
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = RazorTeal,
@@ -9302,8 +9416,10 @@ fun WalletScreen(
                     Switch(
                         checked = extAntiPhishingFilter,
                         onCheckedChange = { checked ->
-                            extAntiPhishingFilter = checked
-                            threatLogs = threatLogs + "[CONFIG] Anti-Phishing Filter set to ${if (checked) "ENABLED" else "DISABLED"}"
+                            pendingWalletToggleSetting = PendingToggle("Anti-Phishing Address Filter", extAntiPhishingFilter) { newValue ->
+                                extAntiPhishingFilter = newValue
+                                threatLogs = threatLogs + "[CONFIG] Anti-Phishing Filter set to ${if (newValue) "ENABLED" else "DISABLED"}"
+                            }
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = RazorTeal,
@@ -9327,8 +9443,10 @@ fun WalletScreen(
                     Switch(
                         checked = extOverlayBlocker,
                         onCheckedChange = { checked ->
-                            extOverlayBlocker = checked
-                            threatLogs = threatLogs + "[CONFIG] Overlay Spoofing Guard set to ${if (checked) "ENABLED" else "DISABLED"}"
+                            pendingWalletToggleSetting = PendingToggle("Overlay Spoofing Prevention", extOverlayBlocker) { newValue ->
+                                extOverlayBlocker = newValue
+                                threatLogs = threatLogs + "[CONFIG] Overlay Spoofing Guard set to ${if (newValue) "ENABLED" else "DISABLED"}"
+                            }
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = RazorTeal,
@@ -9352,8 +9470,10 @@ fun WalletScreen(
                     Switch(
                         checked = extMalwareIsolation,
                         onCheckedChange = { checked ->
-                            extMalwareIsolation = checked
-                            threatLogs = threatLogs + "[CONFIG] Clipboard Isolation set to ${if (checked) "ENABLED" else "DISABLED"}"
+                            pendingWalletToggleSetting = PendingToggle("Clipboard Sniffing Isolation", extMalwareIsolation) { newValue ->
+                                extMalwareIsolation = newValue
+                                threatLogs = threatLogs + "[CONFIG] Clipboard Isolation set to ${if (newValue) "ENABLED" else "DISABLED"}"
+                            }
                         },
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = RazorTeal,
@@ -18956,11 +19076,22 @@ fun AnalyticsDemographicRow(label: String, percentage: Float, color: Color) {
     }
 }
 
+data class PendingToggle(
+    val title: String,
+    val currentValue: Boolean,
+    val onConfirm: (Boolean) -> Unit
+)
+
 @Composable
 fun SettingsScreen(
     viewModel: SocialHubViewModel,
     onBack: () -> Unit
 ) {
+    var pendingToggleSetting by remember { mutableStateOf<PendingToggle?>(null) }
+    var pendingActionDialogTitle by remember { mutableStateOf<String?>(null) }
+    var pendingActionDialogMessage by remember { mutableStateOf<String?>(null) }
+    var pendingActionOnConfirm by remember { mutableStateOf<(() -> Unit)?>(null) }
+
     val isPrivateAccount by viewModel.isPrivateAccount.collectAsStateWithLifecycle()
     val isIncognitoSearch by viewModel.isIncognitoSearch.collectAsStateWithLifecycle()
     val extBankSyncGuard by viewModel.extBankSyncGuard.collectAsStateWithLifecycle()
@@ -19057,6 +19188,101 @@ fun SettingsScreen(
                     context, android.Manifest.permission.POST_NOTIFICATIONS
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
             } else true
+        )
+    }
+
+    if (pendingToggleSetting != null) {
+        val pending = pendingToggleSetting!!
+        AlertDialog(
+            onDismissRequest = { pendingToggleSetting = null },
+            containerColor = Color(0xFF161135),
+            titleContentColor = Color.White,
+            textContentColor = Color.LightGray,
+            title = {
+                Text(
+                    text = "CONFIRM SECURITY OPTION",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = RazorTeal
+                )
+            },
+            text = {
+                Text(
+                    text = "Are you sure you want to ${if (pending.currentValue) "DISABLE" else "ENABLE"} the option: '${pending.title}'?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pending.onConfirm(!pending.currentValue)
+                        pendingToggleSetting = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Confirm", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { pendingToggleSetting = null }
+                ) {
+                    Text("Cancel", color = Color.Gray, fontWeight = FontWeight.Medium)
+                }
+            }
+        )
+    }
+
+    if (pendingActionOnConfirm != null) {
+        AlertDialog(
+            onDismissRequest = {
+                pendingActionOnConfirm = null
+                pendingActionDialogTitle = null
+                pendingActionDialogMessage = null
+            },
+            containerColor = Color(0xFF161135),
+            titleContentColor = Color.White,
+            textContentColor = Color.LightGray,
+            title = {
+                Text(
+                    text = pendingActionDialogTitle ?: "CONFIRM ACTION",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = RazorTeal
+                )
+            },
+            text = {
+                Text(
+                    text = pendingActionDialogMessage ?: "Are you sure you want to perform this action?",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        pendingActionOnConfirm?.invoke()
+                        pendingActionOnConfirm = null
+                        pendingActionDialogTitle = null
+                        pendingActionDialogMessage = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Confirm", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        pendingActionOnConfirm = null
+                        pendingActionDialogTitle = null
+                        pendingActionDialogMessage = null
+                    }
+                ) {
+                    Text("Cancel", color = Color.Gray, fontWeight = FontWeight.Medium)
+                }
+            }
         )
     }
 
@@ -19159,14 +19385,18 @@ fun SettingsScreen(
                                 title = "Private Creator Account",
                                 subtitle = "Only approved followers can view your channel metrics and drops.",
                                 checked = isPrivateAccount,
-                                onCheckedChange = { viewModel.setPrivateAccount(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Private Creator Account", isPrivateAccount) { viewModel.setPrivateAccount(it) }
+                                }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
                                 title = "Incognito Profile Search",
                                 subtitle = "Prevents your handle from appearing in the discovery listings.",
                                 checked = isIncognitoSearch,
-                                onCheckedChange = { viewModel.setIncognitoSearch(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Incognito Profile Search", isIncognitoSearch) { viewModel.setIncognitoSearch(it) }
+                                }
                             )
                         }
                     }
@@ -19204,14 +19434,18 @@ fun SettingsScreen(
                                 title = "Push Alerts on Wallet Activity",
                                 subtitle = "Fires system ledger notifications on credit transactions.",
                                 checked = pushNotificationsEnabled,
-                                onCheckedChange = { viewModel.setPushNotificationsEnabled(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Push Alerts on Wallet Activity", pushNotificationsEnabled) { viewModel.setPushNotificationsEnabled(it) }
+                                }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
                                 title = "Creator Live-Stream Alerts",
                                 subtitle = "Sends urgent banners the microsecond your partner nodes go live.",
                                 checked = creatorAlertsEnabled,
-                                onCheckedChange = { viewModel.setCreatorAlertsEnabled(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Creator Live-Stream Alerts", creatorAlertsEnabled) { viewModel.setCreatorAlertsEnabled(it) }
+                                }
                             )
                         }
                     }
@@ -19257,28 +19491,36 @@ fun SettingsScreen(
                                 title = "Zero Trust Server Wall Protection",
                                 subtitle = "Forces real-time API token rotation against unauthorized request scripts.",
                                 checked = extZeroTrustRotator,
-                                onCheckedChange = { viewModel.setExtZeroTrustRotator(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Zero Trust Server Wall Protection", extZeroTrustRotator) { viewModel.setExtZeroTrustRotator(it) }
+                                }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
                                 title = "Encrypted Payload Rotator",
-                                subtitle = "Encrypts network transmission bodies dynamically.",
+                                subtitle = "Encrypts network body transmissions dynamically.",
                                 checked = extPayloadEncryption,
-                                onCheckedChange = { viewModel.setExtPayloadEncryption(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Encrypted Payload Rotator", extPayloadEncryption) { viewModel.setExtPayloadEncryption(it) }
+                                }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
                                 title = "Anti-Hacker Memory Guard",
                                 subtitle = "Actively blocks rogue memory intrusion / buffer overflow attempts.",
                                 checked = extAntiHackerGuard,
-                                onCheckedChange = { viewModel.setExtAntiHackerGuard(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Anti-Hacker Memory Guard", extAntiHackerGuard) { viewModel.setExtAntiHackerGuard(it) }
+                                }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             SettingsSwitchRow(
                                 title = "Biometric App Startup Lock",
                                 subtitle = "Enforces device biometric authentication on application boot.",
                                 checked = extBiometricStartupLock,
-                                onCheckedChange = { viewModel.setExtBiometricStartupLock(it) }
+                                onCheckedChange = { newValue ->
+                                    pendingToggleSetting = PendingToggle("Biometric App Startup Lock", extBiometricStartupLock) { viewModel.setExtBiometricStartupLock(it) }
+                                }
                             )
                             Spacer(modifier = Modifier.height(14.dp))
                             Row(
@@ -19292,7 +19534,11 @@ fun SettingsScreen(
                                     Text(if (currentEmail.isBlank()) "No email verified" else currentEmail, color = RazorTeal, fontSize = 10.sp)
                                 }
                                 Button(
-                                    onClick = { viewModel.resetEmailVerification() },
+                                    onClick = {
+                                        pendingActionDialogTitle = "RESET SECURITY GATEWAYS?"
+                                        pendingActionDialogMessage = "Are you sure you want to reset all email security gateways? This will sign you out and require re-verification."
+                                        pendingActionOnConfirm = { viewModel.resetEmailVerification() }
+                                    },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color.Red.copy(0.15f), contentColor = Color.Red),
                                     shape = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
@@ -19724,7 +19970,9 @@ fun SettingsScreen(
                                     }
                                     Switch(
                                         checked = extZeroTrustRotator,
-                                        onCheckedChange = { viewModel.setExtZeroTrustRotator(it) },
+                                        onCheckedChange = { newValue ->
+                                            pendingToggleSetting = PendingToggle("Zero-Trust JWT Token Rotator", extZeroTrustRotator) { viewModel.setExtZeroTrustRotator(it) }
+                                        },
                                         colors = SwitchDefaults.colors(checkedThumbColor = RazorTeal, checkedTrackColor = RazorTeal.copy(0.4f))
                                     )
                                 }
@@ -19758,7 +20006,9 @@ fun SettingsScreen(
                                     }
                                     Switch(
                                         checked = extPayloadEncryption,
-                                        onCheckedChange = { viewModel.setExtPayloadEncryption(it) },
+                                        onCheckedChange = { newValue ->
+                                            pendingToggleSetting = PendingToggle("AES-256 Outgoing Payload Encryption", extPayloadEncryption) { viewModel.setExtPayloadEncryption(it) }
+                                        },
                                         colors = SwitchDefaults.colors(checkedThumbColor = RazorTeal, checkedTrackColor = RazorTeal.copy(0.4f))
                                     )
                                 }
@@ -19787,7 +20037,9 @@ fun SettingsScreen(
                                     }
                                     Switch(
                                         checked = extAntiHackerGuard,
-                                        onCheckedChange = { viewModel.setExtAntiHackerGuard(it) },
+                                        onCheckedChange = { newValue ->
+                                            pendingToggleSetting = PendingToggle("Anti-Hacker Memory Guard", extAntiHackerGuard) { viewModel.setExtAntiHackerGuard(it) }
+                                        },
                                         colors = SwitchDefaults.colors(checkedThumbColor = RazorTeal, checkedTrackColor = RazorTeal.copy(0.4f))
                                     )
                                 }
@@ -19796,7 +20048,11 @@ fun SettingsScreen(
                                 
                                 // Deactivate button
                                 OutlinedButton(
-                                    onClick = { viewModel.setTwoStepEnabled(false) },
+                                    onClick = {
+                                        pendingActionDialogTitle = "DEACTIVATE TWO-STEP SECURE SHIELD?"
+                                        pendingActionDialogMessage = "WARNING: Disabling Two-Step Verification lowers account defense and places creator assets at threat. Proceed anyway?"
+                                        pendingActionOnConfirm = { viewModel.setTwoStepEnabled(false) }
+                                    },
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.fillMaxWidth(),
                                     border = BorderStroke(1.dp, Color.Red.copy(0.4f))
@@ -20050,7 +20306,8 @@ fun MandatoryEmailVerificationScreen(
     otpErrorMessage: String?,
     userEmail: String,
     onSendOtp: (String) -> Unit,
-    onVerifyOtp: (String) -> Boolean
+    onVerifyOtp: (String) -> Boolean,
+    onLogout: () -> Unit
 ) {
     var emailInput by remember { mutableStateOf(userEmail) }
     var otpInput by remember { mutableStateOf("") }
@@ -20080,6 +20337,22 @@ fun MandatoryEmailVerificationScreen(
                     strokeWidth = 1f
                 )
             }
+        }
+
+        // Floating Back Button to return to previous state / Login Screen
+        IconButton(
+            onClick = onLogout,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 40.dp, start = 16.dp) // adjusted for system bar
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.08f))
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Back to Login",
+                tint = Color.White
+            )
         }
 
         Card(
@@ -20245,6 +20518,223 @@ fun MandatoryEmailVerificationScreen(
 }
 
 @Composable
+fun AppLockScreen(
+    onUnlockWithPin: (String) -> Boolean,
+    onUnlockWithBiometric: () -> Unit,
+    onLogout: () -> Unit
+) {
+    var pinInput by remember { mutableStateOf("") }
+    var pinError by remember { mutableStateOf(false) }
+    var isScanning by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF090616)),
+        contentAlignment = Alignment.Center
+    ) {
+        // Futuristic tech grid background
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val spacing = 50.dp.toPx()
+            for (x in 0..size.width.toInt() step spacing.toInt()) {
+                drawLine(
+                    color = Color(0xFF191336).copy(alpha = 0.4f),
+                    start = androidx.compose.ui.geometry.Offset(x.toFloat(), 0f),
+                    end = androidx.compose.ui.geometry.Offset(x.toFloat(), size.height)
+                )
+            }
+            for (y in 0..size.height.toInt() step spacing.toInt()) {
+                drawLine(
+                    color = Color(0xFF191336).copy(alpha = 0.4f),
+                    start = androidx.compose.ui.geometry.Offset(0f, y.toFloat()),
+                    end = androidx.compose.ui.geometry.Offset(size.width, y.toFloat())
+                )
+            }
+        }
+
+        // Logout/Back button in top left
+        IconButton(
+            onClick = onLogout,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 40.dp, start = 16.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.05f))
+        ) {
+            Icon(
+                imageVector = Icons.Default.ArrowBack,
+                contentDescription = "Logout",
+                tint = Color.LightGray
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Glowing Lock Icon
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(RazorTeal.copy(alpha = 0.1f))
+                    .border(2.dp, RazorTeal, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Enclave Locked",
+                    tint = RazorTeal,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Text(
+                text = "ENCLAVE DEVICE LOCK",
+                color = Color.White,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Black,
+                letterSpacing = 2.sp
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = "Biometric validation or security PIN required",
+                color = Color.Gray,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // 1. Biometric Scanner Simulation Button
+            Button(
+                onClick = {
+                    scope.launch {
+                        isScanning = true
+                        kotlinx.coroutines.delay(1200) // simulated scanning scan latency
+                        isScanning = false
+                        onUnlockWithBiometric()
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .border(1.5.dp, RazorTeal, RoundedCornerShape(14.dp)),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                shape = RoundedCornerShape(14.dp),
+                enabled = !isScanning
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    if (isScanning) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = RazorTeal,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("SCANNING BIOMETRICS...", color = RazorTeal, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Fingerprint,
+                            contentDescription = "Fingerprint Scan",
+                            tint = RazorTeal,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("SCAN DEVICE FINGERPRINT", color = RazorTeal, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text("— OR ENTER PIN —", color = Color.Gray, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. PIN TextField Input
+            OutlinedTextField(
+                value = pinInput,
+                onValueChange = {
+                    if (it.length <= 8) {
+                        pinInput = it
+                        pinError = false
+                    }
+                },
+                visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                ),
+                singleLine = true,
+                placeholder = { Text("Enter Passcode PIN", color = Color.Gray.copy(0.5f), fontSize = 14.sp) },
+                textStyle = LocalTextStyle.current.copy(
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                ),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = if (pinError) Color.Red else RazorTeal,
+                    unfocusedBorderColor = if (pinError) Color.Red else Color.White.copy(0.12f),
+                    focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                    unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().testTag("app_lock_pin_field")
+            )
+
+            if (pinError) {
+                Text(
+                    text = "INCORRECT SECURITY ACCESS CODE",
+                    color = Color.Red,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            } else {
+                Text(
+                    text = "Hint: Use test simulation code '1234' or '120796'",
+                    color = RazorTeal.copy(0.5f),
+                    fontSize = 9.sp,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // 3. Confirm PIN Submit Button
+            Button(
+                onClick = {
+                    val success = onUnlockWithPin(pinInput)
+                    if (!success) {
+                        pinError = true
+                        pinInput = ""
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("VERIFY & ACCESS ENCLAVE", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
 fun CyberLoginAndSignUpScreen(
     isAuthenticating: Boolean,
     loginErrorMessage: String?,
@@ -20254,8 +20744,8 @@ fun CyberLoginAndSignUpScreen(
     onTabChanged: () -> Unit = {}
 ) {
     var isLoginTab by remember { mutableStateOf(true) }
-    var emailInput by remember { mutableStateOf("") }
-    var passwordInput by remember { mutableStateOf("") }
+    var emailInput by remember { mutableStateOf("shubhra2009biswas@gmail.com") }
+    var passwordInput by remember { mutableStateOf("SHUBHRA1234") }
     var confirmPasswordInput by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
 
