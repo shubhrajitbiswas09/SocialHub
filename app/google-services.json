@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1079780132370",
+    "firebase_url": "https://socialhub-1-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "socialhub-1",
+    "storage_bucket": "socialhub-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1079780132370:android:69e865268bee0799eb7acb",
+        "android_client_info": {
+          "package_name": "com.crox.socialhub1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCG7xA7oqutCoNzEbluwisAe8KDTrf4ClU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

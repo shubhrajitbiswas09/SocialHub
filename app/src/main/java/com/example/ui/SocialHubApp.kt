@@ -273,11 +273,28 @@ fun BubbleEffectContainer(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SocialHubApp(viewModel: SocialHubViewModel) {
+    val isUserLoggedIn by viewModel.isUserLoggedIn.collectAsStateWithLifecycle()
+    val loginErrorMessage by viewModel.loginErrorMessage.collectAsStateWithLifecycle()
+    val registerErrorMessage by viewModel.registerErrorMessage.collectAsStateWithLifecycle()
+    val isAuthenticating by viewModel.isAuthenticating.collectAsStateWithLifecycle()
+
     val isEmailVerified by viewModel.isEmailVerified.collectAsStateWithLifecycle()
     val userEmail by viewModel.userEmail.collectAsStateWithLifecycle()
     val emailOtpSent by viewModel.emailOtpSent.collectAsStateWithLifecycle()
     val isOtpVerifying by viewModel.isOtpVerifying.collectAsStateWithLifecycle()
     val otpErrorMessage by viewModel.otpErrorMessage.collectAsStateWithLifecycle()
+
+    if (!isUserLoggedIn) {
+        CyberLoginAndSignUpScreen(
+            isAuthenticating = isAuthenticating,
+            loginErrorMessage = loginErrorMessage,
+            registerErrorMessage = registerErrorMessage,
+            onLogin = { email, pwd -> viewModel.loginUser(email, pwd) },
+            onRegister = { email, pwd, confPwd -> viewModel.registerUser(email, pwd, confPwd) },
+            onTabChanged = { viewModel.clearAuthErrors() }
+        )
+        return
+    }
 
     if (!isEmailVerified) {
         MandatoryEmailVerificationScreen(
@@ -1188,6 +1205,20 @@ fun FeedScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Infinite scroll / Auto-lazy loading for saving server cost & premium UX
+    LaunchedEffect(listState) {
+        androidx.compose.runtime.snapshotFlow {
+            val layoutInfo = listState.layoutInfo
+            val totalItemsNumber = layoutInfo.totalItemsCount
+            val lastVisibleItemIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleItemIndex >= (totalItemsNumber - 2) && totalItemsNumber > 1
+        }.collect { shouldLoadMore ->
+            if (shouldLoadMore) {
+                onLoadMorePosts()
+            }
+        }
+    }
 
     // Fully optimized and memoized stream items to completely prevent any scrolling lag
     val streamItems = remember(posts, dismissedAds.size) {
@@ -12902,8 +12933,12 @@ fun SecureUpiPaymentDialog(
                                                     .clip(RoundedCornerShape(4.dp))
                                                     .background(RazorBlue.copy(alpha = 0.2f))
                                                     .clickable {
-                                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(sha256Hash))
-                                                        copiedToast = true
+                                                        try {
+                                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(sha256Hash))
+                                                            copiedToast = true
+                                                        } catch (e: Exception) {
+                                                            e.printStackTrace()
+                                                        }
                                                     }
                                                     .padding(horizontal = 6.dp, vertical = 2.dp)
                                             ) {
@@ -15764,8 +15799,12 @@ fun ShareDialog(
                         .background(Color(0xFF130E29), RoundedCornerShape(16.dp))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
                         .clickable {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("$title - $shareUrl"))
-                            isCopied = true
+                            try {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString("$title - $shareUrl"))
+                                isCopied = true
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -16001,8 +16040,12 @@ fun OldShareDialog(
                         .background(Color(0xFF130E29), RoundedCornerShape(16.dp))
                         .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
                         .clickable {
-                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(shareUrl))
-                            isCopied = true
+                            try {
+                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(shareUrl))
+                                isCopied = true
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                         }
                         .padding(horizontal = 14.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -16203,6 +16246,9 @@ fun CommentDialog(
     
     // Track who we are replying to
     var replyingToComment by remember { mutableStateOf<FacebookComment?>(null) }
+
+    // Lazy load state to paginate and save rendering/server overhead
+    var visibleCommentsLimit by remember { mutableStateOf(4) }
     
     // Rich comments state list memoized from comments list
     val richComments = remember(comments) {
@@ -16389,8 +16435,44 @@ fun CommentDialog(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            items(richComments.size) { index ->
-                                val comment = richComments[index]
+                            if (richComments.size > visibleCommentsLimit) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        androidx.compose.material3.TextButton(
+                                            onClick = {
+                                                visibleCommentsLimit += 5
+                                            }
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Refresh,
+                                                    contentDescription = "Load older comments",
+                                                    tint = RazorTeal,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Text(
+                                                    text = "Load older comments (${richComments.size - visibleCommentsLimit} remaining)",
+                                                    color = RazorTeal,
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            val commentsToShow = richComments.takeLast(visibleCommentsLimit)
+                            items(commentsToShow.size) { index ->
+                                val comment = commentsToShow[index]
                                 Column(modifier = Modifier.fillMaxWidth()) {
                                     // Main Comment Row
                                     Row(
@@ -19364,9 +19446,13 @@ fun SettingsScreen(
                                                         .background(Color(0xFFFF9800).copy(0.12f))
                                                         .border(1.dp, Color(0xFFFF9800).copy(0.4f), RoundedCornerShape(6.dp))
                                                         .clickable {
-                                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(seedCode))
-                                                            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                                            codeCopiedToastMessage = "Seed code copied! 📋"
+                                                            try {
+                                                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(seedCode))
+                                                                view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                                                codeCopiedToastMessage = "Seed code copied! 📋"
+                                                            } catch (e: Exception) {
+                                                                e.printStackTrace()
+                                                            }
                                                         }
                                                         .padding(horizontal = 12.dp, vertical = 6.dp)
                                                 ) {
@@ -19388,9 +19474,13 @@ fun SettingsScreen(
                                                 Spacer(modifier = Modifier.height(10.dp))
                                                 Button(
                                                     onClick = {
-                                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(seedCode))
-                                                        view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-                                                        codeCopiedToastMessage = "Seed code copied! 📋"
+                                                        try {
+                                                            clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(seedCode))
+                                                            view.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                                                            codeCopiedToastMessage = "Seed code copied! 📋"
+                                                        } catch (e: Exception) {
+                                                            e.printStackTrace()
+                                                        }
                                                     },
                                                     colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
                                                     shape = RoundedCornerShape(8.dp),
@@ -19785,6 +19875,21 @@ fun SettingsScreen(
                 }
             }
             
+            // Section 5: Session Controls
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = { viewModel.logoutUser() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("logout_btn")
+                ) {
+                    Icon(imageVector = Icons.Default.ExitToApp, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Disconnect Session (Log Out)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+            }
+            
             // Decorative signature space
             item {
                 Spacer(modifier = Modifier.height(40.dp))
@@ -20132,6 +20237,279 @@ fun MandatoryEmailVerificationScreen(
                         onClick = { onSendOtp(emailInput) }
                     ) {
                         Text("Resend Code", color = Color.LightGray, fontSize = 12.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CyberLoginAndSignUpScreen(
+    isAuthenticating: Boolean,
+    loginErrorMessage: String?,
+    registerErrorMessage: String?,
+    onLogin: (String, String) -> Unit,
+    onRegister: (String, String, String) -> Unit,
+    onTabChanged: () -> Unit = {}
+) {
+    var isLoginTab by remember { mutableStateOf(true) }
+    var emailInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
+    var confirmPasswordInput by remember { mutableStateOf("") }
+    var isPasswordVisible by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0F0B21)),
+        contentAlignment = Alignment.Center
+    ) {
+        // Decorative grid lines
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val gridSpacing = 40.dp.toPx()
+            for (x in 0..size.width.toInt() step gridSpacing.toInt()) {
+                drawLine(
+                    color = Color(0xFF1B1437).copy(alpha = 0.3f),
+                    start = androidx.compose.ui.geometry.Offset(x.toFloat(), 0f),
+                    end = androidx.compose.ui.geometry.Offset(x.toFloat(), size.height),
+                    strokeWidth = 1f
+                )
+            }
+            for (y in 0..size.height.toInt() step gridSpacing.toInt()) {
+                drawLine(
+                    color = Color(0xFF1B1437).copy(alpha = 0.3f),
+                    start = androidx.compose.ui.geometry.Offset(0f, y.toFloat()),
+                    end = androidx.compose.ui.geometry.Offset(size.width, y.toFloat()),
+                    strokeWidth = 1f
+                )
+            }
+        }
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .padding(16.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF161135)),
+            border = BorderStroke(1.5.dp, RazorTeal.copy(alpha = 0.7f))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                // Cyber security badge
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(RazorTeal.copy(alpha = 0.15f))
+                        .border(1.5.dp, RazorTeal, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Session Security",
+                        tint = RazorTeal,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "SOCIAL HUB SECURE LOGIN",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.sp
+                )
+
+                Text(
+                    text = "Enter credentials to load your encrypted profile session",
+                    color = Color.LightGray,
+                    fontSize = 11.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+                )
+
+                // Tabs
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.3f))
+                        .padding(4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            if (!isLoginTab) {
+                                isLoginTab = true
+                                onTabChanged()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isLoginTab) RazorTeal else Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = "Log In",
+                            color = if (isLoginTab) Color.Black else Color.LightGray,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (isLoginTab) {
+                                isLoginTab = false
+                                onTabChanged()
+                            }
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(36.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (!isLoginTab) RazorTeal else Color.Transparent
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(0.dp)
+                    ) {
+                        Text(
+                            text = "Sign Up",
+                            color = if (!isLoginTab) Color.Black else Color.LightGray,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Input Email
+                OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = { emailInput = it },
+                    label = { Text("Email Address", color = RazorTeal) },
+                    textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
+                    placeholder = { Text("yourname@domain.com", color = Color.Gray) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("auth_email_input"),
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Default.Email, contentDescription = null, tint = RazorTeal.copy(0.7f))
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = RazorTeal,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                        focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                        unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Input Password
+                OutlinedTextField(
+                    value = passwordInput,
+                    onValueChange = { passwordInput = it },
+                    label = { Text("Password", color = RazorTeal) },
+                    textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().testTag("auth_password_input"),
+                    visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = RazorTeal.copy(0.7f))
+                    },
+                    trailingIcon = {
+                        val image = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff
+                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                            Icon(imageVector = image, contentDescription = null, tint = RazorTeal.copy(0.7f))
+                        }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = RazorTeal,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                        focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                        unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                if (!isLoginTab) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Input Confirm Password
+                    OutlinedTextField(
+                        value = confirmPasswordInput,
+                        onValueChange = { confirmPasswordInput = it },
+                        label = { Text("Confirm Password", color = RazorTeal) },
+                        textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("auth_confirm_password_input"),
+                        visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        leadingIcon = {
+                            Icon(imageVector = Icons.Default.VpnKey, contentDescription = null, tint = RazorTeal.copy(0.7f))
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = RazorTeal,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                            focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                            unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Errors
+                val err = if (isLoginTab) loginErrorMessage else registerErrorMessage
+                if (err != null) {
+                    Text(
+                        text = err,
+                        color = Color.Red,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        if (isLoginTab) {
+                            onLogin(emailInput, passwordInput)
+                        } else {
+                            onRegister(emailInput, passwordInput, confirmPasswordInput)
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .testTag("auth_submit_btn"),
+                    colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isAuthenticating
+                ) {
+                    if (isAuthenticating) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
+                    } else {
+                        Text(
+                            text = if (isLoginTab) "Authenticate Session 📡" else "Create Cyber Account 🚀",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }

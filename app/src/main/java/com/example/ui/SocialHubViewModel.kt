@@ -362,11 +362,133 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     // --- MANDATORY EMAIL VERIFICATION STATES ---
     private val sp = application.getSharedPreferences("secure_hub_prefs", android.content.Context.MODE_PRIVATE)
 
-    private val _isEmailVerified = MutableStateFlow(sp.getBoolean("is_email_verified", false))
-    val isEmailVerified: StateFlow<Boolean> = _isEmailVerified.asStateFlow()
+    // --- LOGIN AND SIGNUP STATES & CONTROLS ---
+    private val _isUserLoggedIn = MutableStateFlow(sp.getBoolean("is_user_logged_in", false))
+    val isUserLoggedIn: StateFlow<Boolean> = _isUserLoggedIn.asStateFlow()
+
+    private val _loginErrorMessage = MutableStateFlow<String?>(null)
+    val loginErrorMessage: StateFlow<String?> = _loginErrorMessage.asStateFlow()
+
+    private val _registerErrorMessage = MutableStateFlow<String?>(null)
+    val registerErrorMessage: StateFlow<String?> = _registerErrorMessage.asStateFlow()
+
+    private val _isAuthenticating = MutableStateFlow(false)
+    val isAuthenticating: StateFlow<Boolean> = _isAuthenticating.asStateFlow()
+
+    fun clearAuthErrors() {
+        _loginErrorMessage.value = null
+        _registerErrorMessage.value = null
+    }
+
+    fun loginUser(email: String, password: String) {
+        val trimmedEmail = email.trim()
+        if (trimmedEmail.isBlank() || password.isBlank()) {
+            _loginErrorMessage.value = "Email and password cannot be empty!"
+            return
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+            _loginErrorMessage.value = "Please enter a valid email address!"
+            return
+        }
+        _loginErrorMessage.value = null
+        _isAuthenticating.value = true
+        
+        viewModelScope.launch {
+            delay(1000) // Authenticating latency
+            val registeredPassword = sp.getString("user_pwd_$trimmedEmail", null)
+            if (registeredPassword == null) {
+                _loginErrorMessage.value = "User does not exist. Please sign up first!"
+                _isAuthenticating.value = false
+            } else if (registeredPassword != password) {
+                _loginErrorMessage.value = "Incorrect password!"
+                _isAuthenticating.value = false
+            } else {
+                _userEmail.value = trimmedEmail
+                _isUserLoggedIn.value = true
+                _loginErrorMessage.value = null
+                _isAuthenticating.value = false
+                
+                val wasVerified = sp.getBoolean("is_verified_$trimmedEmail", false)
+                _isEmailVerified.value = wasVerified
+                _emailOtpSent.value = false
+                
+                sp.edit()
+                    .putBoolean("is_user_logged_in", true)
+                    .putBoolean("is_email_verified", wasVerified)
+                    .putString("user_email", trimmedEmail)
+                    .apply()
+                
+                showNotification("Session Authenticated 🔑", "Welcome back! Dynamic session initialized safely.")
+            }
+        }
+    }
+
+    fun registerUser(email: String, password: String, confirmPassword: String) {
+        val trimmedEmail = email.trim()
+        if (trimmedEmail.isBlank() || password.isBlank() || confirmPassword.isBlank()) {
+            _registerErrorMessage.value = "All fields are mandatory!"
+            return
+        }
+        if (!android.util.Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches()) {
+            _registerErrorMessage.value = "Please enter a valid email address!"
+            return
+        }
+        if (password.length < 6) {
+            _registerErrorMessage.value = "Password must be at least 6 characters!"
+            return
+        }
+        if (password != confirmPassword) {
+            _registerErrorMessage.value = "Passwords do not match!"
+            return
+        }
+        _registerErrorMessage.value = null
+        _isAuthenticating.value = true
+
+        viewModelScope.launch {
+            delay(1000) // Registering latency
+            val existingPassword = sp.getString("user_pwd_$trimmedEmail", null)
+            if (existingPassword != null) {
+                _registerErrorMessage.value = "User with this email already exists!"
+                _isAuthenticating.value = false
+            } else {
+                sp.edit()
+                    .putString("user_pwd_$trimmedEmail", password)
+                    .putString("user_email", trimmedEmail)
+                    .putBoolean("is_user_logged_in", true)
+                    .putBoolean("is_email_verified", false)
+                    .putBoolean("is_verified_$trimmedEmail", false)
+                    .apply()
+                
+                _userEmail.value = trimmedEmail
+                _isUserLoggedIn.value = true
+                _isEmailVerified.value = false
+                _emailOtpSent.value = false
+                _registerErrorMessage.value = null
+                _isAuthenticating.value = false
+                
+                showNotification("Account Registered 🎉", "Please verify your email address to unlock all features.")
+            }
+        }
+    }
+
+    fun logoutUser() {
+        _isUserLoggedIn.value = false
+        _isEmailVerified.value = false
+        _emailOtpSent.value = false
+        sp.edit()
+            .putBoolean("is_user_logged_in", false)
+            .putBoolean("is_email_verified", false)
+            .apply()
+        showNotification("Session Disconnected 🔒", "Signed out successfully.")
+    }
 
     private val _userEmail = MutableStateFlow(sp.getString("user_email", "") ?: "")
     val userEmail: StateFlow<String> = _userEmail.asStateFlow()
+
+    private val _isEmailVerified = MutableStateFlow(
+        sp.getBoolean("is_verified_${sp.getString("user_email", "")}", false)
+    )
+    val isEmailVerified: StateFlow<Boolean> = _isEmailVerified.asStateFlow()
 
     private val _generatedOtp = MutableStateFlow("")
 
@@ -405,6 +527,7 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
             _emailOtpSent.value = false
             sp.edit()
                 .putBoolean("is_email_verified", true)
+                .putBoolean("is_verified_${_userEmail.value}", true)
                 .putString("user_email", _userEmail.value)
                 .apply()
             showNotification("Security Verification Passed ✅", "All server and client wall gateways successfully authenticated!")
