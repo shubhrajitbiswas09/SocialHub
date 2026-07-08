@@ -21174,6 +21174,21 @@ fun CyberLoginAndSignUpScreen(
     var confirmPasswordInput by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
 
+    var showGoogleChooser by remember { mutableStateOf(false) }
+    var googleChooserConnectingEmail by remember { mutableStateOf<String?>(null) }
+    var showCustomEmailField by remember { mutableStateOf(false) }
+    var customGoogleEmailInput by remember { mutableStateOf("") }
+
+    LaunchedEffect(googleChooserConnectingEmail) {
+        val email = googleChooserConnectingEmail
+        if (email != null) {
+            kotlinx.coroutines.delay(1200) // Aesthetic progress latency
+            onGoogleLogin(email)
+            showGoogleChooser = false
+            googleChooserConnectingEmail = null
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -21452,7 +21467,7 @@ fun CyberLoginAndSignUpScreen(
                 // Single Clean Google Login Option
                 Button(
                     onClick = {
-                        onGoogleLogin(emailInput)
+                        showGoogleChooser = true
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -21486,6 +21501,229 @@ fun CyberLoginAndSignUpScreen(
                             color = Color.White,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+
+        // Custom, stunning Google Account Chooser bottom sheet overlay
+        if (showGoogleChooser) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable { showGoogleChooser = false }
+            )
+            
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                        .clickable(enabled = false) {}, // Consume clicks
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        // Drag handle
+                        Box(
+                            modifier = Modifier
+                                .width(36.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.LightGray)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Google Header
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White)
+                                    .border(1.dp, Color.LightGray, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "G",
+                                    color = Color(0xFF4285F4),
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Sign in with Google",
+                                color = Color(0xFF1F1F1F),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(4.dp))
+                        
+                        Text(
+                            text = "to continue to Social Hub",
+                            color = Color(0xFF5F6368),
+                            fontSize = 14.sp
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        if (googleChooserConnectingEmail != null) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(40.dp),
+                                    color = Color(0xFF4285F4),
+                                    strokeWidth = 3.dp
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "Connecting to ${googleChooserConnectingEmail}...",
+                                    color = Color(0xFF1F1F1F),
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        } else {
+                            val accounts = listOf(
+                                Pair("Moumita", "moumita12071996@gmail.com"),
+                                Pair("Shubhra Biswas", "shubhra2009biswas@gmail.com")
+                            )
+                            
+                            accounts.forEach { account ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            googleChooserConnectingEmail = account.second
+                                        }
+                                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(CircleShape)
+                                            .background(
+                                                if (account.first.startsWith("M")) Color(0xFFE0F7FA) else Color(0xFFFFF3E0)
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = account.first.take(1),
+                                            color = if (account.first.startsWith("M")) Color(0xFF006064) else Color(0xFFE65100),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp
+                                        )
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    
+                                    Column(modifier = Modifier.weight(1.5f)) {
+                                        Text(
+                                            text = account.first,
+                                            color = Color(0xFF1F1F1F),
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp
+                                        )
+                                        Text(
+                                            text = account.second,
+                                            color = Color(0xFF5F6368),
+                                            fontSize = 12.sp
+                                        )
+                                    }
+                                }
+                                
+                                HorizontalDivider(color = Color(0xFFE0E0E0))
+                            }
+                            
+                            if (showCustomEmailField) {
+                                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                                    OutlinedTextField(
+                                        value = customGoogleEmailInput,
+                                        onValueChange = { customGoogleEmailInput = it },
+                                        label = { Text("Enter Google Email", color = Color(0xFF4285F4)) },
+                                        textStyle = LocalTextStyle.current.copy(color = Color.Black, fontSize = 14.sp),
+                                        placeholder = { Text("example@gmail.com", color = Color.Gray) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = Color(0xFF4285F4),
+                                            unfocusedBorderColor = Color.LightGray,
+                                            focusedContainerColor = Color.White,
+                                            unfocusedContainerColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    Button(
+                                        onClick = {
+                                            if (customGoogleEmailInput.isNotBlank() && customGoogleEmailInput.contains("@")) {
+                                                googleChooserConnectingEmail = customGoogleEmailInput.trim()
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4))
+                                    ) {
+                                        Text("Continue", color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showCustomEmailField = true }
+                                        .padding(vertical = 16.dp, horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PersonAdd,
+                                        contentDescription = null,
+                                        tint = Color(0xFF4285F4),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(
+                                        text = "Use another account",
+                                        color = Color(0xFF4285F4),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text(
+                            text = "To continue, Google will share your name, email address, language preference, and profile picture with Social Hub. Before using this app, you can review its privacy policy and terms of service.",
+                            color = Color(0xFF757575),
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
                 }

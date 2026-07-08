@@ -414,109 +414,114 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         _isAuthenticating.value = true
         
         viewModelScope.launch {
-            val isBypassEmail = trimmedEmail.equals(SECURE_BYPASS_EMAIL, ignoreCase = true)
-            val isBypass = isBypassEmail && password == SECURE_BYPASS_PASSWORD
-
-            if (isBypass) {
-                // Admin bypass
-                _userEmail.value = trimmedEmail
-                _isUserLoggedIn.value = true
-                _loginErrorMessage.value = null
-                _isAuthenticating.value = false
-                _isEmailVerified.value = true
-                _emailOtpSent.value = false
-                _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
-                
-                sp.edit()
-                    .putBoolean("is_user_logged_in", true)
-                    .putBoolean("is_email_verified", true)
-                    .putBoolean("is_verified_$trimmedEmail", true)
-                    .putString("user_pwd_$trimmedEmail", SECURE_BYPASS_PASSWORD)
-                    .putString("user_email", trimmedEmail)
-                    .apply()
-                
-                showNotification("Session Authenticated 🔑", "Welcome developer! Dynamic bypass session initialized safely.")
-                return@launch
-            }
-
-            var firebaseSuccess = false
             try {
-                // Fast-timeout (2.5 seconds) Firebase auth to prevent hanging or infinite spinner
-                val authResult = withTimeoutOrNull(2500) {
-                    suspendCancellableCoroutine { continuation ->
-                        firebaseAuth.signInWithEmailAndPassword(trimmedEmail, password)
-                            .addOnCompleteListener { task ->
-                                if (continuation.isActive) {
-                                    continuation.resume(if (task.isSuccessful) task.result else null)
-                                }
-                            }
-                            .addOnFailureListener {
-                                if (continuation.isActive) {
-                                    continuation.resume(null)
-                                }
-                            }
-                    }
-                }
-                
-                if (authResult != null) {
-                    firebaseSuccess = true
-                    val user = authResult.user
-                    val emailVerified = user?.isEmailVerified ?: false
-                    _userEmail.value = trimmedEmail
-                    _isUserLoggedIn.value = true
-                    _loginErrorMessage.value = null
-                    _isAuthenticating.value = false
-                    _isEmailVerified.value = emailVerified
-                    _emailOtpSent.value = false
-                    _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
-                    
-                    sp.edit()
-                        .putBoolean("is_user_logged_in", true)
-                        .putBoolean("is_email_verified", emailVerified)
-                        .putBoolean("is_verified_$trimmedEmail", emailVerified)
-                        .putString("user_pwd_$trimmedEmail", password)
-                        .putString("user_email", trimmedEmail)
-                        .apply()
-                    
-                    showNotification("Firebase Session Connected 🌐", "Connected successfully via Firebase secure servers!")
-                }
-            } catch (e: Exception) {
-                // Fail silently and use offline fallback
-            }
+                val isBypassEmail = trimmedEmail.equals(SECURE_BYPASS_EMAIL, ignoreCase = true)
+                val isBypass = isBypassEmail && password == SECURE_BYPASS_PASSWORD
 
-            if (!firebaseSuccess) {
-                // Secure local offline sandbox database fallback
-                val registeredPassword = sp.getString("user_pwd_$trimmedEmail", null)
-                val isCorrectPwd = registeredPassword == password
-                val isFirstTime = registeredPassword == null
-                
-                if (isCorrectPwd || isFirstTime) {
-                    val wasVerified = if (isFirstTime) true else sp.getBoolean("is_verified_$trimmedEmail", true)
+                if (isBypass) {
+                    // Admin bypass
                     _userEmail.value = trimmedEmail
                     _isUserLoggedIn.value = true
                     _loginErrorMessage.value = null
                     _isAuthenticating.value = false
-                    _isEmailVerified.value = wasVerified
+                    _isEmailVerified.value = true
                     _emailOtpSent.value = false
                     _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
                     
                     sp.edit()
                         .putBoolean("is_user_logged_in", true)
-                        .putBoolean("is_email_verified", wasVerified)
-                        .putBoolean("is_verified_$trimmedEmail", wasVerified)
-                        .putString("user_pwd_$trimmedEmail", password)
+                        .putBoolean("is_email_verified", true)
+                        .putBoolean("is_verified_$trimmedEmail", true)
+                        .putString("user_pwd_$trimmedEmail", SECURE_BYPASS_PASSWORD)
                         .putString("user_email", trimmedEmail)
                         .apply()
                     
-                    if (isFirstTime) {
-                        showNotification("Secure Sandbox Account Created 🔐", "Dynamic secure profile initialized offline.")
-                    } else {
-                        showNotification("Offline Session Loaded 📡", "Connected to local secure sandbox offline.")
-                    }
-                } else {
-                    _loginErrorMessage.value = "Incorrect password! Please try again."
-                    _isAuthenticating.value = false
+                    showNotification("Session Authenticated 🔑", "Welcome developer! Dynamic bypass session initialized safely.")
+                    return@launch
                 }
+
+                var firebaseSuccess = false
+                try {
+                    // Fast-timeout (2.5 seconds) Firebase auth to prevent hanging or infinite spinner
+                    val authResult = withTimeoutOrNull(2500) {
+                        suspendCancellableCoroutine { continuation ->
+                            firebaseAuth.signInWithEmailAndPassword(trimmedEmail, password)
+                                .addOnCompleteListener { task ->
+                                    if (continuation.isActive) {
+                                        continuation.resume(if (task.isSuccessful) task.result else null)
+                                    }
+                                }
+                                .addOnFailureListener {
+                                    if (continuation.isActive) {
+                                        continuation.resume(null)
+                                    }
+                                }
+                        }
+                    }
+                    
+                    if (authResult != null) {
+                        firebaseSuccess = true
+                        val user = authResult.user
+                        val emailVerified = user?.isEmailVerified ?: false
+                        _userEmail.value = trimmedEmail
+                        _isUserLoggedIn.value = true
+                        _loginErrorMessage.value = null
+                        _isAuthenticating.value = false
+                        _isEmailVerified.value = emailVerified
+                        _emailOtpSent.value = false
+                        _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
+                        
+                        sp.edit()
+                            .putBoolean("is_user_logged_in", true)
+                            .putBoolean("is_email_verified", emailVerified)
+                            .putBoolean("is_verified_$trimmedEmail", emailVerified)
+                            .putString("user_pwd_$trimmedEmail", password)
+                            .putString("user_email", trimmedEmail)
+                            .apply()
+                        
+                        showNotification("Firebase Session Connected 🌐", "Connected successfully via Firebase secure servers!")
+                    }
+                } catch (e: Throwable) {
+                    // Fail silently and use offline fallback
+                }
+
+                if (!firebaseSuccess) {
+                    // Secure local offline sandbox database fallback
+                    val registeredPassword = sp.getString("user_pwd_$trimmedEmail", null)
+                    val isCorrectPwd = registeredPassword == password
+                    val isFirstTime = registeredPassword == null
+                    
+                    if (isCorrectPwd || isFirstTime) {
+                        val wasVerified = if (isFirstTime) true else sp.getBoolean("is_verified_$trimmedEmail", true)
+                        _userEmail.value = trimmedEmail
+                        _isUserLoggedIn.value = true
+                        _loginErrorMessage.value = null
+                        _isAuthenticating.value = false
+                        _isEmailVerified.value = wasVerified
+                        _emailOtpSent.value = false
+                        _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
+                        
+                        sp.edit()
+                            .putBoolean("is_user_logged_in", true)
+                            .putBoolean("is_email_verified", wasVerified)
+                            .putBoolean("is_verified_$trimmedEmail", wasVerified)
+                            .putString("user_pwd_$trimmedEmail", password)
+                            .putString("user_email", trimmedEmail)
+                            .apply()
+                        
+                        if (isFirstTime) {
+                            showNotification("Secure Sandbox Account Created 🔐", "Dynamic secure profile initialized offline.")
+                        } else {
+                            showNotification("Offline Session Loaded 📡", "Connected to local secure sandbox offline.")
+                        }
+                    } else {
+                        _loginErrorMessage.value = "Incorrect password! Please try again."
+                        _isAuthenticating.value = false
+                    }
+                }
+            } catch (t: Throwable) {
+                _loginErrorMessage.value = "Secure connection initialized with error: ${t.localizedMessage}. Please try again."
+                _isAuthenticating.value = false
             }
         }
     }
@@ -543,36 +548,61 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         _isAuthenticating.value = true
 
         viewModelScope.launch {
-            if (trimmedEmail.equals(SECURE_BYPASS_EMAIL, ignoreCase = true)) {
-                _registerErrorMessage.value = "This email is reserved for system administration. Please log in directly!"
-                _isAuthenticating.value = false
-                return@launch
-            }
-
-            var firebaseSuccess = false
             try {
-                // Fast-timeout (2.5 seconds) Firebase auth to prevent hanging or infinite spinner
-                val authResult = withTimeoutOrNull(2500) {
-                    suspendCancellableCoroutine { continuation ->
-                        firebaseAuth.createUserWithEmailAndPassword(trimmedEmail, password)
-                            .addOnCompleteListener { task ->
-                                if (continuation.isActive) {
-                                    continuation.resume(if (task.isSuccessful) task.result else null)
-                                }
-                            }
-                            .addOnFailureListener {
-                                if (continuation.isActive) {
-                                    continuation.resume(null)
-                                }
-                            }
-                    }
+                if (trimmedEmail.equals(SECURE_BYPASS_EMAIL, ignoreCase = true)) {
+                    _registerErrorMessage.value = "This email is reserved for system administration. Please log in directly!"
+                    _isAuthenticating.value = false
+                    return@launch
                 }
 
-                if (authResult != null) {
-                    firebaseSuccess = true
-                    val user = authResult.user
-                    user?.sendEmailVerification()
-                    
+                var firebaseSuccess = false
+                try {
+                    // Fast-timeout (2.5 seconds) Firebase auth to prevent hanging or infinite spinner
+                    val authResult = withTimeoutOrNull(2500) {
+                        suspendCancellableCoroutine { continuation ->
+                            firebaseAuth.createUserWithEmailAndPassword(trimmedEmail, password)
+                                .addOnCompleteListener { task ->
+                                    if (continuation.isActive) {
+                                        continuation.resume(if (task.isSuccessful) task.result else null)
+                                    }
+                                }
+                                .addOnFailureListener {
+                                    if (continuation.isActive) {
+                                        continuation.resume(null)
+                                    }
+                                }
+                        }
+                    }
+
+                    if (authResult != null) {
+                        firebaseSuccess = true
+                        val user = authResult.user
+                        user?.sendEmailVerification()
+                        
+                        sp.edit()
+                            .putString("user_pwd_$trimmedEmail", password)
+                            .putString("user_email", trimmedEmail)
+                            .putBoolean("is_user_logged_in", true)
+                            .putBoolean("is_email_verified", true)
+                            .putBoolean("is_verified_$trimmedEmail", true)
+                            .apply()
+                        
+                        _userEmail.value = trimmedEmail
+                        _isUserLoggedIn.value = true
+                        _isEmailVerified.value = true
+                        _emailOtpSent.value = false
+                        _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
+                        _registerErrorMessage.value = null
+                        _isAuthenticating.value = false
+                        
+                        showNotification("Firebase Registered 📡", "Verification email dispatched! Verified to unlock all benefits.")
+                    }
+                } catch (e: Throwable) {
+                    // Fail silently to fall back
+                }
+
+                if (!firebaseSuccess) {
+                    // Offline fallback registration
                     sp.edit()
                         .putString("user_pwd_$trimmedEmail", password)
                         .putString("user_email", trimmedEmail)
@@ -589,31 +619,11 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
                     _registerErrorMessage.value = null
                     _isAuthenticating.value = false
                     
-                    showNotification("Firebase Registered 📡", "Verification email dispatched! Verified to unlock all benefits.")
+                    showNotification("Secure Account Active 🔐", "Offline fallback account registered and authenticated.")
                 }
-            } catch (e: Exception) {
-                // Fail silently to fall back
-            }
-
-            if (!firebaseSuccess) {
-                // Offline fallback registration
-                sp.edit()
-                    .putString("user_pwd_$trimmedEmail", password)
-                    .putString("user_email", trimmedEmail)
-                    .putBoolean("is_user_logged_in", true)
-                    .putBoolean("is_email_verified", true)
-                    .putBoolean("is_verified_$trimmedEmail", true)
-                    .apply()
-                
-                _userEmail.value = trimmedEmail
-                _isUserLoggedIn.value = true
-                _isEmailVerified.value = true
-                _emailOtpSent.value = false
-                _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
-                _registerErrorMessage.value = null
+            } catch (t: Throwable) {
+                _registerErrorMessage.value = "Registration initialized with error: ${t.localizedMessage}. Please try again."
                 _isAuthenticating.value = false
-                
-                showNotification("Secure Account Active 🔐", "Offline fallback account registered and authenticated.")
             }
         }
     }
