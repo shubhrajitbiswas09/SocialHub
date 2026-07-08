@@ -12440,7 +12440,7 @@ fun RazorpayCheckoutOverlay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Razorpay Ledger Gateway",
+                        text = "Google Play Billing Sandbox",
                         fontWeight = FontWeight.Bold,
                         color = RazorBlue,
                         fontSize = 12.sp,
@@ -12471,7 +12471,7 @@ fun RazorpayCheckoutOverlay(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text("AUTHORIZED DEBIT TRANSACTION", fontSize = 10.sp, color = GrayText, fontWeight = FontWeight.Bold)
+                                    Text("SANDBOX DEVELOPMENT TEST TRANSACTION", fontSize = 10.sp, color = GrayText, fontWeight = FontWeight.Bold)
                                     Text(
                                         text = "$${String.format("%.2f", checkoutInfo.amount)}",
                                         fontWeight = FontWeight.Black,
@@ -12490,7 +12490,7 @@ fun RazorpayCheckoutOverlay(
                                 ) {
                                     Icon(imageVector = Icons.Default.Lock, contentDescription = null, tint = Color.Black, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Pay with Virtual Wallet Ledger", color = Color.Black, fontWeight = FontWeight.Black)
+                                    Text("Pay with Google Play Test Card", color = Color.Black, fontWeight = FontWeight.Black)
                                 }
                             }
                         }
@@ -12503,8 +12503,8 @@ fun RazorpayCheckoutOverlay(
                             ) {
                                 CircularProgressIndicator(color = RazorBlue, strokeWidth = 5.dp)
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Text(text = "AUTHENTICATING VIRTUAL LEDGER CARD...", fontWeight = FontWeight.Bold, color = LightText, fontSize = 13.sp)
-                                Text(text = "Rerouting securely via central bank ledger API nodes.", fontSize = 10.sp, color = GrayText, textAlign = TextAlign.Center)
+                                Text(text = "AUTHENTICATING SANDBOX CARD...", fontWeight = FontWeight.Bold, color = LightText, fontSize = 13.sp)
+                                Text(text = "Processing virtual payment securely via Google Play Sandbox API.", fontSize = 10.sp, color = GrayText, textAlign = TextAlign.Center)
 
                                 val scope = rememberCoroutineScope()
                                 LaunchedEffect(Unit) {
@@ -12531,10 +12531,10 @@ fun RazorpayCheckoutOverlay(
                                     Icon(imageVector = Icons.Default.Check, contentDescription = "Success check", tint = Color.Black, modifier = Modifier.size(36.dp))
                                 }
                                 Spacer(modifier = Modifier.height(16.dp))
-                                Text(text = "PAYMENT SUCCESSFUL", fontWeight = FontWeight.Black, color = RazorTeal, style = MaterialTheme.typography.titleMedium)
+                                Text(text = "SANDBOX PAYMENT SUCCESSFUL", fontWeight = FontWeight.Black, color = RazorTeal, style = MaterialTheme.typography.titleMedium)
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Ledger verified securely. Creator has been routed the funds directly.",
+                                    text = "Sandbox transaction completed successfully. Virtual purchase unlocked!",
                                     fontSize = 11.sp,
                                     color = GrayText,
                                     textAlign = TextAlign.Center
@@ -20488,6 +20488,28 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
                                 text = "This application runs inside a local sandbox environment. Security elements (e.g., Zero-Trust Web3 safeguards, cryptographic payload rotators, anti-hacker memory guards, and biometric vaults) are virtualized front-end simulations designed for education and showcase purposes. They do not alter your physical Android operating system security layers.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+                            HorizontalDivider(color = Color.White.copy(0.08f))
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Text(
+                                text = "GOOGLE PLAY BILLING & PURCHASE POLICY",
+                                color = RazorTeal,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "1. In-App Purchase Terms:\nAll digital transactions (e.g. Creator Coin top-ups, Sticker Packs, and VIP memberships) are processed securely through Google Play Billing. Content is dynamically unlocked upon billing confirmation.\n\n" +
+                                        "2. Refund Guidelines:\nStandard self-service refunds are available through your Google Play account within 48 hours of transaction initiation. For refund reviews outside this window, contact customer support with your GPA transaction receipt ID.\n\n" +
+                                        "3. Subscription Auto-Renewal:\nVIP Active tier subscriptions automatically renew each month. You can manage or cancel auto-renewal anytime by visiting Google Play Store > Account > Subscriptions. No cancellation fees apply.\n\n" +
+                                        "4. Security & Encryption:\nAll sensitive payment details are handled directly by Google's secure billing servers. SocialHub never accesses, intercepts, or retains your physical credit card or billing credentials.",
                                 color = Color.LightGray,
                                 fontSize = 11.sp,
                                 lineHeight = 16.sp

@@ -1094,7 +1094,7 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    // Add Balance (Simulate Razorpay Top-up)
+    // Add Balance (Simulate Google Play Sandbox Top-up)
     fun addWalletFunds(amount: Double) {
         if (amount <= 0.0 || !amount.isFinite() || amount > 100000.0) {
             showNotification("Validation Failed", "Invalid deposit amount specified!")
@@ -1104,7 +1104,7 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
             _walletBalance.value += amount
             val tx = Transaction(
                 type = "WALLET_FUND",
-                description = "Loaded funds via Razorpay Secure Gateway",
+                description = "Loaded funds via Google Play Sandbox",
                 amount = amount,
                 currency = "USD",
                 recipientHandle = "user_wallet",
@@ -1112,7 +1112,7 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
                 paymentId = generateSecurePaymentId("pay_fund")
             )
             repository.insertTransaction(tx)
-            showNotification("Success", "Deposited $${String.format("%.2f", amount)} successfully via Razorpay!")
+            showNotification("Success", "Deposited $${String.format("%.2f", amount)} successfully via Google Play Sandbox!")
         }
     }
 
@@ -1227,7 +1227,7 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         if (_walletBalance.value < amount) {
-            showNotification("Insufficient Funds", "Please load funds using Razorpay in your wallet first!")
+            showNotification("Insufficient Funds", "Please load sandbox funds in your wallet first!")
             return
         }
         viewModelScope.launch {
@@ -1245,7 +1245,7 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
                 paymentId = generateSecurePaymentId("pay_tip")
             )
             repository.insertTransaction(tx)
-            showNotification("Tip Sent", "Processed $${String.format("%.2f", amount)} securely with Razorpay!")
+            showNotification("Tip Sent", "Processed $${String.format("%.2f", amount)} securely with Google Play Sandbox!")
         }
     }
 
@@ -1333,7 +1333,7 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
             return
         }
         if (_walletBalance.value < event.ticketPrice) {
-            showNotification("Insufficient Wallet", "Deposit funds via Razorpay first.")
+            showNotification("Insufficient Wallet", "Deposit sandbox funds first.")
             return
         }
         viewModelScope.launch {
