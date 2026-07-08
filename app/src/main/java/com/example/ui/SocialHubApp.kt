@@ -20411,8 +20411,93 @@ fun SettingsScreen(
                     }
                 }
             }
+
+            // Section 5: Legal & Privacy Policy (Google Play Policy Compliance)
+            item {
+                SettingsOptionRow(
+                    icon = Icons.Default.Info,
+                    iconColor = RazorTeal,
+                    title = "Legal, Privacy & Disclaimers",
+                    subtitle = "Privacy policy, user terms & sandbox info",
+                    isExpanded = expandedSection == "legal",
+                    onClick = {
+                        expandedSection = if (expandedSection == "legal") null else "legal"
+                    }
+                )
+
+                AnimatedVisibility(
+                    visible = expandedSection == "legal",
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFF16161D)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = "PRIVACY POLICY & DATA DISCLOSURE",
+                                color = RazorTeal,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "1. Data Storage: All user account info, posts, likes, and configuration settings are stored strictly locally inside your device's secured Room Database sandbox. No user-identifiable data is uploaded to external servers without explicit user authentication and consent.\n" +
+                                        "2. Hardware Permissions: Camera, microphone, and storage permissions are only used locally for simulating creator hub features, capturing profile images, and recording mock live streams.\n" +
+                                        "3. Analytics & Safety: No background telemetries or secret tracking scripts are included in this app.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                            
+                            Spacer(modifier = Modifier.height(14.dp))
+                            HorizontalDivider(color = Color.White.copy(0.08f))
+                            Spacer(modifier = Modifier.height(14.dp))
+                            
+                            Text(
+                                text = "TERMS OF SERVICE",
+                                color = RazorTeal,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "By using SocialHub, you agree to comply with our community guidelines. Any form of hate speech, abuse, or harassment within simulated chat sessions or live event portals is strictly prohibited.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                            
+                            Spacer(modifier = Modifier.height(14.dp))
+                            HorizontalDivider(color = Color.White.copy(0.08f))
+                            Spacer(modifier = Modifier.height(14.dp))
+                            
+                            Text(
+                                text = "SANDBOX SIMULATION DISCLAIMER",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.sp
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "This application runs inside a local sandbox environment. Security elements (e.g., Zero-Trust Web3 safeguards, cryptographic payload rotators, anti-hacker memory guards, and biometric vaults) are virtualized front-end simulations designed for education and showcase purposes. They do not alter your physical Android operating system security layers.",
+                                color = Color.LightGray,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+            }
             
-            // Section 5: Session Controls
+            // Section 6: Session Controls
             item {
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
