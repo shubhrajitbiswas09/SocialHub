@@ -275,11 +275,17 @@ fun BubbleEffectContainer(
 fun SocialHubApp(viewModel: SocialHubViewModel) {
     val localContext = androidx.compose.ui.platform.LocalContext.current
     val gso = androidx.compose.runtime.remember {
-        com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+        val webClientIdResId = localContext.resources.getIdentifier("default_web_client_id", "string", localContext.packageName)
+        val webClientId = if (webClientIdResId != 0) localContext.getString(webClientIdResId) else null
+        
+        val builder = com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
             com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
-        )
-            .requestEmail()
-            .build()
+        ).requestEmail()
+        
+        if (webClientId != null) {
+            builder.requestIdToken(webClientId)
+        }
+        builder.build()
     }
     val googleSignInClient = androidx.compose.runtime.remember {
         com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(localContext, gso)
@@ -292,11 +298,15 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
             val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
             try {
                 val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                val idToken = account?.idToken ?: ""
                 val email = account?.email ?: ""
-                if (email.isNotBlank()) {
-                    viewModel.loginWithGoogleToken(email)
+                if (idToken.isNotBlank()) {
+                    viewModel.loginWithGoogleFirebaseToken(idToken, email)
+                } else if (email.isNotBlank()) {
+                    // Local sandbox mode if client ID / Google Services properties are missing or pending configuration
+                    viewModel.loginWithGoogleFirebaseToken("", email)
                 } else {
-                    viewModel.setLoginError("Could not retrieve email from Google Account.")
+                    viewModel.setLoginError("Could not retrieve credentials from Google Account.")
                 }
             } catch (e: Exception) {
                 viewModel.setLoginError("Google Sign-In failed: " + e.getLocalizedMessage())
@@ -324,10 +334,14 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
             onLogin = { email, pwd -> viewModel.loginUser(email, pwd) },
             onRegister = { email, pwd, confPwd -> viewModel.registerUser(email, pwd, confPwd) },
             onTabChanged = { viewModel.clearAuthErrors() },
-            onGoogleLogin = {
-            val signInIntent = googleSignInClient.signInIntent
-            googleSignInLauncher.launch(signInIntent)
-        }
+            onGoogleLogin = { typedEmail ->
+                if (typedEmail.isBlank()) {
+                    val signInIntent = googleSignInClient.signInIntent
+                    googleSignInLauncher.launch(signInIntent)
+                } else {
+                    viewModel.loginWithGoogleFirebaseToken("", typedEmail)
+                }
+            }
         )
         return
     }
@@ -21169,8 +21183,8 @@ fun CyberLoginAndSignUpScreen(
     onGoogleLogin: (String) -> Unit
 ) {
     var isLoginTab by remember { mutableStateOf(true) }
-    var emailInput by remember { mutableStateOf("shubhra2009biswas@gmail.com") }
-    var passwordInput by remember { mutableStateOf("SHUBHRA1234") }
+    var emailInput by remember { mutableStateOf("") }
+    var passwordInput by remember { mutableStateOf("") }
     var confirmPasswordInput by remember { mutableStateOf("") }
     var isPasswordVisible by remember { mutableStateOf(false) }
 
@@ -21598,119 +21612,92 @@ fun CyberLoginAndSignUpScreen(
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
-                                    text = "Connecting to ${googleChooserConnectingEmail}...",
+                                    text = if (googleChooserConnectingEmail!!.isEmpty()) "Opening Google Accounts..." else "Connecting to ${googleChooserConnectingEmail}...",
                                     color = Color(0xFF1F1F1F),
                                     fontWeight = FontWeight.SemiBold,
                                     fontSize = 14.sp
                                 )
                             }
                         } else {
-                            val accounts = listOf(
-                                Pair("Moumita", "moumita12071996@gmail.com"),
-                                Pair("Shubhra Biswas", "shubhra2009biswas@gmail.com")
-                            )
-                            
-                            accounts.forEach { account ->
-                                Row(
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+                                // Real Google Sign-In Trigger button
+                                Button(
+                                    onClick = {
+                                        googleChooserConnectingEmail = "" // Triggers empty onGoogleLogin() to invoke actual Google Accounts SDK
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clickable {
-                                            googleChooserConnectingEmail = account.second
-                                        }
-                                        .padding(vertical = 12.dp, horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(36.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (account.first.startsWith("M")) Color(0xFFE0F7FA) else Color(0xFFFFF3E0)
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = account.first.take(1),
-                                            color = if (account.first.startsWith("M")) Color(0xFF006064) else Color(0xFFE65100),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 16.sp
-                                        )
-                                    }
-                                    
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    
-                                    Column(modifier = Modifier.weight(1.5f)) {
-                                        Text(
-                                            text = account.first,
-                                            color = Color(0xFF1F1F1F),
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 14.sp
-                                        )
-                                        Text(
-                                            text = account.second,
-                                            color = Color(0xFF5F6368),
-                                            fontSize = 12.sp
-                                        )
-                                    }
-                                }
-                                
-                                HorizontalDivider(color = Color(0xFFE0E0E0))
-                            }
-                            
-                            if (showCustomEmailField) {
-                                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-                                    OutlinedTextField(
-                                        value = customGoogleEmailInput,
-                                        onValueChange = { customGoogleEmailInput = it },
-                                        label = { Text("Enter Google Email", color = Color(0xFF4285F4)) },
-                                        textStyle = LocalTextStyle.current.copy(color = Color.Black, fontSize = 14.sp),
-                                        placeholder = { Text("example@gmail.com", color = Color.Gray) },
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedBorderColor = Color(0xFF4285F4),
-                                            unfocusedBorderColor = Color.LightGray,
-                                            focusedContainerColor = Color.White,
-                                            unfocusedContainerColor = Color.White
-                                        ),
-                                        shape = RoundedCornerShape(8.dp)
-                                    )
-                                    
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    
-                                    Button(
-                                        onClick = {
-                                            if (customGoogleEmailInput.isNotBlank() && customGoogleEmailInput.contains("@")) {
-                                                googleChooserConnectingEmail = customGoogleEmailInput.trim()
-                                            }
-                                        },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4))
-                                    ) {
-                                        Text("Continue", color = Color.White, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            } else {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable { showCustomEmailField = true }
-                                        .padding(vertical = 16.dp, horizontal = 4.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .height(48.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF2F2F2)),
+                                    shape = RoundedCornerShape(100.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFE0E0E0))
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.PersonAdd,
+                                        imageVector = Icons.Default.AccountCircle,
                                         contentDescription = null,
                                         tint = Color(0xFF4285F4),
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier.size(20.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "Use another account",
-                                        color = Color(0xFF4285F4),
+                                        text = "Use System Google Accounts",
+                                        color = Color(0xFF1F1F1F),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp
                                     )
+                                }
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE0E0E0))
+                                    Text(
+                                        text = " OR USE SANDBOX GMAIL ",
+                                        color = Color.Gray,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp)
+                                    )
+                                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color(0xFFE0E0E0))
+                                }
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                OutlinedTextField(
+                                    value = customGoogleEmailInput,
+                                    onValueChange = { customGoogleEmailInput = it },
+                                    label = { Text("Email or phone", color = Color(0xFF4285F4)) },
+                                    textStyle = LocalTextStyle.current.copy(color = Color.Black, fontSize = 14.sp),
+                                    placeholder = { Text("example@gmail.com", color = Color.Gray) },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color(0xFF4285F4),
+                                        unfocusedBorderColor = Color.LightGray,
+                                        focusedContainerColor = Color.White,
+                                        unfocusedContainerColor = Color.White,
+                                        focusedTextColor = Color.Black,
+                                        unfocusedTextColor = Color.Black
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                
+                                Spacer(modifier = Modifier.height(16.dp))
+                                
+                                Button(
+                                    onClick = {
+                                        if (customGoogleEmailInput.isNotBlank() && customGoogleEmailInput.contains("@")) {
+                                            googleChooserConnectingEmail = customGoogleEmailInput.trim()
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4)),
+                                    shape = RoundedCornerShape(100.dp)
+                                ) {
+                                    Text("Next", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                                 }
                             }
                         }
