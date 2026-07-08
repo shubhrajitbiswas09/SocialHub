@@ -1,0 +1,23 @@
+workflows:
+  android-workflow:
+    name: Android Release APK Build
+    max_build_duration: 60
+    instance_type: mac_mini_m1
+    environment:
+      groups:
+        - app
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'main'
+    scripts:
+      - name: Create google-services.json
+        script: |
+          echo "$GOOGLE_SERVICES_JSON" > app/google-services.json
+      - name: Build Android Release APK
+        script: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+    artifacts:
+      - app/build/outputs/apk/release/*.apk
