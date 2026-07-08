@@ -273,6 +273,38 @@ fun BubbleEffectContainer(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SocialHubApp(viewModel: SocialHubViewModel) {
+    val localContext = androidx.compose.ui.platform.LocalContext.current
+    val gso = androidx.compose.runtime.remember {
+        com.google.android.gms.auth.api.signin.GoogleSignInOptions.Builder(
+            com.google.android.gms.auth.api.signin.GoogleSignInOptions.DEFAULT_SIGN_IN
+        )
+            .requestEmail()
+            .build()
+    }
+    val googleSignInClient = androidx.compose.runtime.remember {
+        com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(localContext, gso)
+    }
+
+    val googleSignInLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val task = com.google.android.gms.auth.api.signin.GoogleSignIn.getSignedInAccountFromIntent(result.data)
+            try {
+                val account = task.getResult(com.google.android.gms.common.api.ApiException::class.java)
+                val email = account?.email ?: ""
+                if (email.isNotBlank()) {
+                    viewModel.loginWithGoogleToken(email)
+                } else {
+                    viewModel.setLoginError("Could not retrieve email from Google Account.")
+                }
+            } catch (e: Exception) {
+                viewModel.setLoginError("Google Sign-In failed: " + e.getLocalizedMessage())
+            }
+        } else {
+            viewModel.setLoginError("Google Sign-In cancelled or failed.")
+        }
+    }
     val isUserLoggedIn by viewModel.isUserLoggedIn.collectAsStateWithLifecycle()
     val loginErrorMessage by viewModel.loginErrorMessage.collectAsStateWithLifecycle()
     val registerErrorMessage by viewModel.registerErrorMessage.collectAsStateWithLifecycle()
@@ -291,7 +323,11 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
             registerErrorMessage = registerErrorMessage,
             onLogin = { email, pwd -> viewModel.loginUser(email, pwd) },
             onRegister = { email, pwd, confPwd -> viewModel.registerUser(email, pwd, confPwd) },
-            onTabChanged = { viewModel.clearAuthErrors() }
+            onTabChanged = { viewModel.clearAuthErrors() },
+            onGoogleLogin = {
+            val signInIntent = googleSignInClient.signInIntent
+            googleSignInLauncher.launch(signInIntent)
+        }
         )
         return
     }
@@ -2182,7 +2218,7 @@ fun NewPostDialog(
         var selectedCreator by remember { mutableStateOf<Creator?>(null) }
         var showCreatorDropdown by remember { mutableStateOf(false) }
 
-        val context = androidx.compose.ui.platform.LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
         var attachedMediaType by remember { mutableStateOf<String?>(null) } // "attached_image", "attached_video", "attached_audio"
         var permissionStatusMessage by remember { mutableStateOf<String?>(null) }
         var requestedPermissionType by remember { mutableStateOf<String?>(null) }
@@ -4738,7 +4774,7 @@ fun CreativeStudioDialog(onDismiss: () -> Unit, onPublish: (String, String?) -> 
         var selectedMediaList by remember { mutableStateOf<List<SelectedMedia>>(emptyList()) }
         var activePreviewItem by remember { mutableStateOf<GalleryMedia?>(null) }
         
-        val context = androidx.compose.ui.platform.LocalContext.current
+    val context = androidx.compose.ui.platform.LocalContext.current
 
         val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
             contract = androidx.activity.result.contract.ActivityResultContracts.TakePicturePreview()
@@ -21129,7 +21165,8 @@ fun CyberLoginAndSignUpScreen(
     registerErrorMessage: String?,
     onLogin: (String, String) -> Unit,
     onRegister: (String, String, String) -> Unit,
-    onTabChanged: () -> Unit = {}
+    onTabChanged: () -> Unit = {},
+    onGoogleLogin: (String) -> Unit
 ) {
     var isLoginTab by remember { mutableStateOf(true) }
     var emailInput by remember { mutableStateOf("shubhra2009biswas@gmail.com") }
@@ -21214,7 +21251,7 @@ fun CyberLoginAndSignUpScreen(
                     modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
                 )
 
-                // Tabs
+                // Tabs for Login vs Register
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -21386,6 +21423,68 @@ fun CyberLoginAndSignUpScreen(
                         Text(
                             text = if (isLoginTab) "Authenticate Session 📡" else "Create Cyber Account 🚀",
                             color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                // Divider
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.12f))
+                    Text(
+                        text = " OR SECURE HANDSHAKE VIA ",
+                        color = Color.Gray,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp)
+                    )
+                    HorizontalDivider(modifier = Modifier.weight(1f), color = Color.White.copy(alpha = 0.12f))
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Single Clean Google Login Option
+                Button(
+                    onClick = {
+                        onGoogleLogin(emailInput)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp)
+                        .border(1.dp, Color.White.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1B163B)),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(16.dp)
+                                .clip(CircleShape)
+                                .background(Color.White),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "G",
+                                color = Color(0xFF4285F4),
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Sign In with Google",
+                            color = Color.White,
+                            fontSize = 12.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }

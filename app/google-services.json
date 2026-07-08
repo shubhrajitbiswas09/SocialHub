@@ -13,7 +13,12 @@
           "package_name": "com.crox.socialhub1"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "1079780132370-58knr30c68p3sj1vnke7vntbf6tv5403.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCG7xA7oqutCoNzEbluwisAe8KDTrf4ClU"
@@ -21,7 +26,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1079780132370-58knr30c68p3sj1vnke7vntbf6tv5403.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
