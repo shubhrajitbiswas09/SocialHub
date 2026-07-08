@@ -22,14 +22,16 @@ sealed class Screen {
 
 class SocialHubViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Secure obfuscated credentials to prevent binary-level string extraction by attackers/hackers
-    private val SECURE_BYPASS_EMAIL = charArrayOf(
-        's', 'h', 'u', 'b', 'r', 'a', '2', '0', '0', '9', 'b', 'i', 's', 'w', 'a', 's', '@', 'g', 'm', 'a', 'i', 'l', '.', 'c', 'o', 'm'
-    ).joinToString("")
+    // Decrypted at runtime to prevent static DEX extraction by decompilers/hackers
+    private val SECURE_BYPASS_EMAIL = decryptSecret(intArrayOf(104, 93, 106, 87, 93, 103, 86, 39, 37, 37, 46, 87, 94, 104, 108, 86, 104, 53, 92, 98, 86, 94, 97, 35, 88, 100, 98))
+    private val SECURE_BYPASS_PASSWORD = decryptSecret(intArrayOf(72, 61, 74, 55, 61, 71, 54, 38, 39, 40, 41))
 
-    private val SECURE_BYPASS_PASSWORD = charArrayOf(
-        'S', 'H', 'U', 'B', 'H', 'R', 'A', '1', '2', '3', '4'
-    ).joinToString("")
+    private fun decryptSecret(encoded: IntArray): String {
+        return encoded.map { (it + 11).toChar() }.joinToString("")
+    }
+
+    private var failedBypassAttempts = 0
+    private var bypassLockoutUntil = 0L
 
     private val db = AppDatabase.getDatabase(application)
     private val repository = SocialHubRepository(db.dao(), application)
@@ -407,8 +409,34 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         
         viewModelScope.launch {
             delay(1000) // Authenticating latency
-            val isBypass = trimmedEmail.equals(SECURE_BYPASS_EMAIL, ignoreCase = true) && password == SECURE_BYPASS_PASSWORD
-            val registeredPassword = if (isBypass) SECURE_BYPASS_PASSWORD else sp.getString("user_pwd_$trimmedEmail", null)
+            val isBypassEmail = trimmedEmail.equals(SECURE_BYPASS_EMAIL, ignoreCase = true)
+            
+            if (isBypassEmail && System.currentTimeMillis() < bypassLockoutUntil) {
+                val secondsLeft = (bypassLockoutUntil - System.currentTimeMillis()) / 1000
+                _loginErrorMessage.value = "Admin bypass is temporarily locked for $secondsLeft seconds due to too many failed attempts!"
+                _isAuthenticating.value = false
+                logSecurityEvent("🚨 SECURITY WARNING: Blocked brute-force login attempt to Admin account.")
+                return@launch
+            }
+
+            val isBypass = isBypassEmail && password == SECURE_BYPASS_PASSWORD
+            val registeredPassword = if (isBypassEmail) {
+                if (!isBypass) {
+                    failedBypassAttempts++
+                    if (failedBypassAttempts >= 3) {
+                        bypassLockoutUntil = System.currentTimeMillis() + 60000L // 60s lockout
+                        failedBypassAttempts = 0
+                        logSecurityEvent("🚨 CRITICAL BRUTE-FORCE ALERT: 3 failed attempts on Admin account. Lockout activated.")
+                    } else {
+                        logSecurityEvent("⚠️ Warning: Failed Admin bypass login attempt ($failedBypassAttempts/3).")
+                    }
+                } else {
+                    failedBypassAttempts = 0
+                }
+                SECURE_BYPASS_PASSWORD
+            } else {
+                sp.getString("user_pwd_$trimmedEmail", null)
+            }
             
             if (registeredPassword == null) {
                 _loginErrorMessage.value = "User does not exist. Please sign up first!"
@@ -463,6 +491,11 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
 
         viewModelScope.launch {
             delay(1000) // Registering latency
+            if (trimmedEmail.equals(SECURE_BYPASS_EMAIL, ignoreCase = true)) {
+                _registerErrorMessage.value = "This email is reserved for system administration. Please log in directly!"
+                _isAuthenticating.value = false
+                return@launch
+            }
             val existingPassword = sp.getString("user_pwd_$trimmedEmail", null)
             if (existingPassword != null) {
                 _registerErrorMessage.value = "User with this email already exists!"

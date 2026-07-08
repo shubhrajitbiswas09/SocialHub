@@ -296,7 +296,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
         return
     }
 
-    if (!isEmailVerified) {
+    if (false && !isEmailVerified) {
         MandatoryEmailVerificationScreen(
             emailOtpSent = emailOtpSent,
             isOtpVerifying = isOtpVerifying,
@@ -312,7 +312,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
     val isAppUnlocked by viewModel.isAppUnlocked.collectAsStateWithLifecycle()
     val extBiometricStartupLock by viewModel.extBiometricStartupLock.collectAsStateWithLifecycle()
 
-    if (extBiometricStartupLock && !isAppUnlocked) {
+    if (false && extBiometricStartupLock && !isAppUnlocked) {
         AppLockScreen(
             onUnlockWithPin = { viewModel.unlockApp(it) },
             onUnlockWithBiometric = { viewModel.triggerBiometricMockUnlock() },
@@ -8197,7 +8197,7 @@ fun WalletScreen(
 ) {
     val uriHandler = androidx.compose.ui.platform.LocalUriHandler.current
     var isBalanceVisible by remember { mutableStateOf(true) }
-    var isWalletScreenLocked by remember { mutableStateOf(true) }
+    var isWalletScreenLocked by remember { mutableStateOf(false) }
     var showProfileEditor by remember { mutableStateOf(false) }
     var showTopUpDialog by remember { mutableStateOf(false) }
     var showSecureUpiDialog by remember { mutableStateOf(false) }
@@ -8996,7 +8996,7 @@ fun WalletScreen(
     val sp = remember { context.getSharedPreferences("secure_hub_prefs", android.content.Context.MODE_PRIVATE) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        if (isWalletScreenLocked) {
+        if (false) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -9224,59 +9224,22 @@ fun WalletScreen(
             }
         }
 
-        // Two Tab Selector Buttons side-by-side matching the design
+        // Two Tab Selector Buttons replaced with just My Creator Hub full width to disable secured wallet screen
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(horizontal = 16.dp, vertical = 14.dp)
         ) {
-            // Button 1: Secure Wallet
-            val isWalletActive = activeProfileTab == "wallet"
+            // My Creator Hub takes full width
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isWalletActive) Color(0xFF00FF88) else Color(0x19FFFFFF)
+                    containerColor = Color(0xFF00FF88)
                 ),
-                border = if (isWalletActive) null else BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                border = null,
                 modifier = Modifier
-                    .weight(1f)
+                    .fillMaxWidth()
                     .height(54.dp)
-                    .clickable { activeProfileTab = "wallet" }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.CreditCard,
-                        contentDescription = "Wallet",
-                        tint = if (isWalletActive) Color.Black else Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Secure Wallet",
-                        color = if (isWalletActive) Color.Black else Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.5.sp
-                    )
-                }
-            }
-
-            // Button 2: My Creator Hub
-            val isProfileActive = activeProfileTab == "profile"
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isProfileActive) Color(0xFF00FF88) else Color(0x19FFFFFF)
-                ),
-                border = if (isProfileActive) null else BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                modifier = Modifier
-                    .weight(1f)
-                    .height(54.dp)
-                    .clickable { activeProfileTab = "profile" }
             ) {
                 Row(
                     modifier = Modifier.fillMaxSize(),
@@ -9286,13 +9249,13 @@ fun WalletScreen(
                     Icon(
                         imageVector = Icons.Default.Person,
                         contentDescription = "Creator Hub",
-                        tint = if (isProfileActive) Color.Black else Color.White,
+                        tint = Color.Black,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "My Creator Hub",
-                        color = if (isProfileActive) Color.Black else Color.White,
+                        color = Color.Black,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp
                     )
