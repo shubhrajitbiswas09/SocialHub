@@ -734,6 +734,9 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun logoutUser() {
+        try {
+            firebaseAuth.signOut()
+        } catch (e: Exception) {}
         _isUserLoggedIn.value = false
         _isEmailVerified.value = false
         _emailOtpSent.value = false
@@ -745,6 +748,38 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         clearBackstack()
         _currentScreen.value = Screen.Feed
         showNotification("Session Disconnected 🔒", "Signed out successfully.")
+    }
+
+    fun onFirebaseUserDetected(firebaseUser: com.google.firebase.auth.FirebaseUser) {
+        val email = firebaseUser.email ?: ""
+        if (email.isNotBlank()) {
+            _userEmail.value = email
+            _isUserLoggedIn.value = true
+            _isEmailVerified.value = true
+            _emailOtpSent.value = false
+            _isAppUnlocked.value = !sp.getBoolean("ext_biometric_startup_lock", false)
+            
+            sp.edit()
+                .putBoolean("is_user_logged_in", true)
+                .putBoolean("is_email_verified", true)
+                .putBoolean("is_verified_$email", true)
+                .putString("user_email", email)
+                .apply()
+            
+            logSecurityEvent("🛡️ Firebase user session sync active: $email")
+        }
+    }
+
+    fun onFirebaseUserLoggedOut() {
+        _isUserLoggedIn.value = false
+        _isEmailVerified.value = false
+        _emailOtpSent.value = false
+        sp.edit()
+            .putBoolean("is_user_logged_in", false)
+            .putBoolean("is_email_verified", false)
+            .putString("user_email", "")
+            .apply()
+        logSecurityEvent("🔒 Firebase session unauthenticated.")
     }
 
     fun changePassword(oldPass: String, newPass: String): Boolean {
