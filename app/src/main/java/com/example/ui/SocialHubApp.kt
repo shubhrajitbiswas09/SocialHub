@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
@@ -291,6 +292,15 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
         com.google.android.gms.auth.api.signin.GoogleSignIn.getClient(localContext, gso)
     }
 
+    val handleLogout = androidx.compose.runtime.remember {
+        {
+            try {
+                googleSignInClient.signOut()
+            } catch (e: Exception) {}
+            viewModel.logoutUser()
+        }
+    }
+
     val googleSignInLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -354,7 +364,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
             userEmail = userEmail,
             onSendOtp = { viewModel.sendEmailOtp(it) },
             onVerifyOtp = { viewModel.verifyEmailOtp(it) },
-            onLogout = { viewModel.logoutUser() }
+            onLogout = handleLogout
         )
         return
     }
@@ -362,11 +372,11 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
     val isAppUnlocked by viewModel.isAppUnlocked.collectAsStateWithLifecycle()
     val extBiometricStartupLock by viewModel.extBiometricStartupLock.collectAsStateWithLifecycle()
 
-    if (false && extBiometricStartupLock && !isAppUnlocked) {
+    if (extBiometricStartupLock && !isAppUnlocked) {
         AppLockScreen(
             onUnlockWithPin = { viewModel.unlockApp(it) },
             onUnlockWithBiometric = { viewModel.triggerBiometricMockUnlock() },
-            onLogout = { viewModel.logoutUser() }
+            onLogout = handleLogout
         )
         return
     }
@@ -379,6 +389,9 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
     val adminApiUrl by viewModel.adminApiUrl.collectAsStateWithLifecycle()
     val bannerSyncStatus by viewModel.bannerSyncStatus.collectAsStateWithLifecycle()
     val externalBannersState by viewModel.externalBannersState.collectAsStateWithLifecycle()
+    val isNetworkAvailable by viewModel.isNetworkAvailable.collectAsStateWithLifecycle()
+    val billingConnected by viewModel.billingConnectionState.collectAsStateWithLifecycle()
+    val billingProducts by viewModel.playBillingProducts.collectAsStateWithLifecycle()
 
     val isLagWatchdogEnabled by viewModel.isLagWatchdogEnabled.collectAsStateWithLifecycle()
     val isLaggingOrHanging by viewModel.isLaggingOrHanging.collectAsStateWithLifecycle()
@@ -503,7 +516,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                         if (hasBackstack) {
                             IconButton(onClick = { viewModel.navigateBack() }) {
                                 Icon(
-                                    imageVector = Icons.Default.ArrowBack,
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                     contentDescription = "Back",
                                     tint = MaterialTheme.colorScheme.onBackground
                                 )
@@ -771,6 +784,38 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                 .padding(innerPadding)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                AnimatedVisibility(
+                    visible = !isNetworkAvailable,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFD32F2F))
+                            .padding(vertical = 8.dp, horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = "Offline Mode Indicator",
+                                tint = Color.White,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "No connection. Running in offline secure mode.",
+                                color = Color.White,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
                 if (isHeaderSearchActive) {
                     if (headerSearchQuery.isNotBlank()) {
                         GlobalSearchResultsPanel(
@@ -890,6 +935,9 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                             },
                                             onTipCreatorClick = { amount ->
                                                 viewModel.triggerDirectTip(creator, amount)
+                                            },
+                                            onBuyTicketClick = { event ->
+                                                viewModel.triggerTicketBuy(event)
                                             }
                                         )
                                     } else {
@@ -1008,6 +1056,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                             )
                             is Screen.Settings -> SettingsScreen(
                                 viewModel = viewModel,
+                                onLogout = handleLogout,
                                 onBack = { viewModel.navigateBack() }
                             )
                         }
@@ -6294,10 +6343,45 @@ fun LiveEventsScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(40.dp),
+                    .padding(vertical = 48.dp, horizontal = 24.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text("No products match your search.", color = Color.Gray)
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(RazorBlue.copy(alpha = 0.12f))
+                            .border(1.dp, RazorBlue.copy(alpha = 0.4f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "No Products Matching Search",
+                            tint = RazorBlue,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "No Products Found",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "We couldn't find any items matching your search query. Try typing something else or selecting another category.",
+                        color = GrayText,
+                        fontSize = 11.5.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(horizontal = 24.dp)
+                    )
+                }
             }
         } else {
             Column(
@@ -8277,6 +8361,12 @@ fun WalletScreen(
     var threatAlertMessage by remember { mutableStateOf("") }
     
     var successMessageToast by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(successMessageToast) {
+        if (successMessageToast != null) {
+            kotlinx.coroutines.delay(3000)
+            successMessageToast = null
+        }
+    }
     var activeProfileTab by remember { mutableStateOf("profile") }
     var showAppSettingsDialog by remember { mutableStateOf(false) }
     var showAccountPrivacyDialog by remember { mutableStateOf(false) }
@@ -8679,7 +8769,6 @@ fun WalletScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // Bio (Max 20 words)
                     val bioWords = editBio.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
                     val bioWordCount = bioWords.size
                     val isBioExceeded = bioWordCount > 20
@@ -8690,16 +8779,28 @@ fun WalletScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text("Bio (Max 20 words)", color = GrayText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        Text(
-                            text = "$bioWordCount/20 words",
-                            color = if (isBioExceeded) Color(0xFFFF5252) else Color(0xFF00FF88),
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = "${editBio.length}/150 chars",
+                                color = if (editBio.length >= 130) Color(0xFFFF9800) else Color.LightGray,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "$bioWordCount/20 words",
+                                color = if (isBioExceeded) Color(0xFFFF5252) else Color(0xFF00FF88),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                     OutlinedTextField(
                         value = editBio,
-                        onValueChange = { editBio = it },
+                        onValueChange = { 
+                            if (it.length <= 150) {
+                                editBio = it 
+                            }
+                        },
                         maxLines = 3,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = Color.White,
@@ -9840,10 +9941,42 @@ fun WalletScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (transactions.isEmpty()) {
-                RecentActivityItem("Netflix Subscription", "TODAY, 9:41 AM", "-$15.00", Color(0xFFFF5252))
-                RecentActivityItem("Transfer from Alex", "YESTERDAY, 4:20 PM", "+$50.00", RazorTeal)
-                RecentActivityItem("Starbucks Coffee", "YESTERDAY, 8:15 AM", "-$5.40", Color(0xFFFF5252))
-                RecentActivityItem("Nike Store", "MON, 12 OCT", "-$120.00", Color(0xFFFF5252))
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.02f)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(0.05f))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp).fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ReceiptLong,
+                            contentDescription = "No transactions",
+                            tint = RazorTeal.copy(0.4f),
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "SECURE WALLET LEDGER EMPTY",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "No cryptographic transaction records have been generated yet. Deposit funds or subscribe to creators to start.",
+                            color = GrayText,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 15.sp
+                        )
+                    }
+                }
             } else {
                 // Take up to 8 of the latest database transactions
                 transactions.sortedByDescending { it.timestamp }.take(8).forEach { tx ->
@@ -11306,7 +11439,8 @@ fun CreatorDetailScreen(
     onVerifyToggle: (Boolean) -> Unit = {},
     onVideoClick: (Post) -> Unit = {},
     onProductBuyClick: (MarketplaceProduct) -> Unit = {},
-    onTipCreatorClick: (Double) -> Unit = {}
+    onTipCreatorClick: (Double) -> Unit = {},
+    onBuyTicketClick: (Event) -> Unit = {}
 ) {
     val activeSub = subscriptions.find { it.creatorId == creator.id }
     
@@ -12081,6 +12215,136 @@ fun CreatorDetailScreen(
                                                 }
                                             }
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // PART 3: UPCOMING LIVE EVENTS
+                Text(
+                    text = "🎟️ Live Stream Events & Masterclasses",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 12.dp)
+                )
+
+                if (events.isEmpty()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground.copy(alpha = 0.5f)),
+                        border = BorderStroke(1.dp, MinimalBorder.copy(alpha = 0.3f))
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(imageVector = Icons.Default.Event, contentDescription = null, tint = GrayText, modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("No Upcoming Live Events", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            Text("This creator hasn't scheduled any private live stream broadcasts yet.", color = GrayText, fontSize = 10.sp, textAlign = TextAlign.Center)
+                        }
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        events.forEach { event ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth().testTag("event_card_${event.id}"),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(containerColor = CardBackground),
+                                border = BorderStroke(1.dp, RazorTeal.copy(0.4f))
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .background(RazorTeal.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(
+                                                text = "LIVE STREAM",
+                                                color = RazorTeal,
+                                                fontWeight = FontWeight.Black,
+                                                fontSize = 8.sp,
+                                                letterSpacing = 0.5.sp
+                                            )
+                                        }
+                                        Text(
+                                            text = "$${String.format("%.2f", event.ticketPrice)}",
+                                            color = RazorTeal,
+                                            fontWeight = FontWeight.Black,
+                                            fontSize = 14.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = event.title,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = event.description,
+                                        color = GrayText,
+                                        fontSize = 11.sp,
+                                        lineHeight = 15.sp
+                                    )
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Schedule, contentDescription = null, tint = RazorBlue, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = event.dateString,
+                                            color = RazorBlue,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Place, contentDescription = null, tint = GrayText, modifier = Modifier.size(14.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = event.location,
+                                            color = GrayText,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    val isSoldOut = event.ticketsBought >= event.originalAvailable
+                                    Button(
+                                        onClick = { onBuyTicketClick(event) },
+                                        enabled = !isSoldOut,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = if (isSoldOut) Color.DarkGray else RazorTeal,
+                                            contentColor = Color.Black
+                                        ),
+                                        shape = RoundedCornerShape(10.dp),
+                                        modifier = Modifier.fillMaxWidth().height(36.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isSoldOut) "SOLD OUT" else "Get Live Stream Ticket (${event.originalAvailable - event.ticketsBought} left)",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
                                     }
                                 }
                             }
@@ -17455,22 +17719,40 @@ fun GlobalSearchResultsPanel(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 24.dp),
+                        .padding(vertical = 32.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            tint = GrayText,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(RazorTeal.copy(alpha = 0.12f))
+                                .border(1.dp, RazorTeal.copy(alpha = 0.4f), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = "Empty Search Results",
+                                tint = RazorTeal,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
                         Text(
-                            text = "No real-time creators found matching this name.",
+                            text = "No Creators Found",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "No real-time creators found matching this name. Try searching another handle or checking back later.",
                             color = GrayText,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                            lineHeight = 15.sp,
+                            modifier = Modifier.padding(horizontal = 24.dp)
                         )
                     }
                 }
@@ -18835,6 +19117,11 @@ fun NotificationCenterDialog(
     val walletAlerts by viewModel.walletAlertsEnabled.collectAsStateWithLifecycle()
     val creatorAlerts by viewModel.creatorAlertsEnabled.collectAsStateWithLifecycle()
     val chatAlerts by viewModel.chatAlertsEnabled.collectAsStateWithLifecycle()
+    val watchdogStatus by viewModel.watchdogStatus.collectAsStateWithLifecycle()
+
+    val billingConnected by viewModel.billingConnectionState.collectAsStateWithLifecycle()
+    val billingProducts by viewModel.playBillingProducts.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     var activeTab by remember { mutableStateOf(0) } // 0: Notifications, 1: Settings
 
@@ -19117,6 +19404,66 @@ fun NotificationCenterDialog(
                             modifier = Modifier.padding(top = 8.dp)
                         )
 
+                        // Real-time Watchdog Connection & Latency Card (Issue 11)
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0F0F1A)),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, RazorTeal.copy(0.3f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(if (watchdogStatus.contains("Healthy")) Color(0xFF00FF88) else Color(0xFFFF9800))
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "NETWORK & RESOURCE WATCHDOG",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            letterSpacing = 1.sp
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .background(RazorTeal.copy(0.15f), RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "LIVE",
+                                            color = RazorTeal,
+                                            fontSize = 8.sp,
+                                            fontWeight = FontWeight.Black
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Text(
+                                    text = watchdogStatus,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Watchdog runs automated high-frequency main thread thread-sleep sensing loops and memory leak traps to detect background overlay hijacking or CPU stress vectors instantly.",
+                                    color = GrayText,
+                                    fontSize = 10.sp,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                        }
+
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.03f)),
@@ -19183,6 +19530,134 @@ fun NotificationCenterDialog(
                                     checked = chatAlerts,
                                     onCheckedChange = { viewModel.setChatAlertsEnabled(it) }
                                 )
+                            }
+                        }
+
+                        Text(
+                            text = "GOOGLE PLAY BILLING v7.0+",
+                            color = RazorBlue,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 12.sp,
+                            letterSpacing = 0.5.sp,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.03f)),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(0.05f))
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "Billing Client Connection",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp
+                                        )
+                                        Text(
+                                            text = if (billingConnected) "Active & Connected" else "Standby / Standalone Mode",
+                                            color = if (billingConnected) RazorTeal else Color.Gray,
+                                            fontSize = 11.sp,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .clip(CircleShape)
+                                            .background(if (billingConnected) RazorTeal else Color.Gray)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(14.dp))
+                                Divider(color = Color.White.copy(0.06f))
+                                Spacer(modifier = Modifier.height(14.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Button(
+                                        onClick = {
+                                            viewModel.playBillingManager.queryAvailableProducts()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = RazorBlue),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Query Products", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Button(
+                                        onClick = {
+                                            viewModel.playBillingManager.restorePurchases { purchases ->
+                                                viewModel.logSecurityEvent("💳 Restored ${purchases.size} active Google Play purchases.")
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.06f)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Restore Purchases", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                    }
+                                }
+
+                                if (billingProducts.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(14.dp))
+                                    Text(
+                                        text = "Query Results (${billingProducts.size} items found):",
+                                        color = Color.White.copy(0.6f),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    billingProducts.forEach { product ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                                .background(Color.White.copy(0.02f), RoundedCornerShape(6.dp))
+                                                .clickable {
+                                                    val act = context as? android.app.Activity
+                                                    if (act != null) {
+                                                        viewModel.playBillingManager.launchBillingFlow(act, product)
+                                                    }
+                                                }
+                                                .padding(8.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column {
+                                                Text(product.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                                Text(product.productId, color = Color.Gray, fontSize = 9.sp)
+                                            }
+                                            Text(
+                                                text = "Purchase",
+                                                color = RazorTeal,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    Text(
+                                        text = "Note: Active product queries rely on live Google Play services. Click 'Query Products' to fetch available items.",
+                                        color = Color.White.copy(0.4f),
+                                        fontSize = 10.sp,
+                                        lineHeight = 13.sp
+                                    )
+                                }
                             }
                         }
 
@@ -19284,6 +19759,7 @@ data class PendingToggle(
 @Composable
 fun SettingsScreen(
     viewModel: SocialHubViewModel,
+    onLogout: () -> Unit,
     onBack: () -> Unit
 ) {
     var pendingToggleSetting by remember { mutableStateOf<PendingToggle?>(null) }
@@ -19307,6 +19783,7 @@ fun SettingsScreen(
     val extBiometricStartupLock by viewModel.extBiometricStartupLock.collectAsStateWithLifecycle()
     val extPayloadEncryption by viewModel.extPayloadEncryption.collectAsStateWithLifecycle()
     val extAntiHackerGuard by viewModel.extAntiHackerGuard.collectAsStateWithLifecycle()
+    val watchdogStatus by viewModel.watchdogStatus.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     
@@ -19346,6 +19823,9 @@ fun SettingsScreen(
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+
+    val billingConnected by viewModel.billingConnectionState.collectAsStateWithLifecycle()
+    val billingProducts by viewModel.playBillingProducts.collectAsStateWithLifecycle()
 
     var cameraStatus by remember {
         mutableStateOf(
@@ -19500,7 +19980,7 @@ fun SettingsScreen(
         ) {
             IconButton(onClick = onBack) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White,
                     modifier = Modifier.size(24.dp)
@@ -19520,7 +20000,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             // Instagram-Style Search Bar
             item {
@@ -20573,7 +21053,7 @@ fun SettingsScreen(
             item {
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
-                    onClick = { viewModel.logoutUser() },
+                    onClick = onLogout,
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F)),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.fillMaxWidth().testTag("logout_btn")
@@ -20631,7 +21111,7 @@ fun SettingsOptionRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .padding(vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -21162,7 +21642,7 @@ fun AppLockScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
+                    .heightIn(min = 48.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
                 shape = RoundedCornerShape(12.dp)
             ) {
@@ -21192,6 +21672,13 @@ fun CyberLoginAndSignUpScreen(
     var googleChooserConnectingEmail by remember { mutableStateOf<String?>(null) }
     var showCustomEmailField by remember { mutableStateOf(false) }
     var customGoogleEmailInput by remember { mutableStateOf("") }
+    var showGoogleErrorHelpDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(loginErrorMessage) {
+        if (loginErrorMessage != null && loginErrorMessage.contains("Google Sign-In failed")) {
+            showGoogleErrorHelpDialog = true
+        }
+    }
 
     LaunchedEffect(googleChooserConnectingEmail) {
         val email = googleChooserConnectingEmail
@@ -21228,6 +21715,72 @@ fun CyberLoginAndSignUpScreen(
                     strokeWidth = 1f
                 )
             }
+        }
+
+        if (showGoogleErrorHelpDialog) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { 
+                    showGoogleErrorHelpDialog = false 
+                },
+                title = {
+                    Text(
+                        "Google Accounts Setup Info 🌐",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        fontSize = 18.sp
+                    )
+                },
+                text = {
+                    Column {
+                        Text(
+                            "The application attempted to connect to Google Accounts, but failed with exception:\n",
+                            color = Color.LightGray,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "${loginErrorMessage ?: "Unknown Error"}",
+                            color = Color(0xFFFF5252),
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            "💡 Why did this happen?\n" +
+                            "1. This is common if the developer's SHA-1 and SHA-256 fingerprints are not registered in the Firebase Console yet.\n" +
+                            "2. The google-services.json might be missing or pending configuration.\n\n" +
+                            "✨ What can you do?\n" +
+                            "• Use the secure 'Sandbox Gmail' input below to test the full Google Login and registration flow offline instantly!\n" +
+                            "• To connect your live production Firebase, register the SHA fingerprints provided in the app information.",
+                            color = Color.LightGray,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showGoogleErrorHelpDialog = false
+                            showGoogleChooser = true // Re-opens chooser so they can use sandbox
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RazorTeal)
+                    ) {
+                        Text("Use Sandbox Mode 🟢", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = {
+                            showGoogleErrorHelpDialog = false
+                        }
+                    ) {
+                        Text("Dismiss", color = Color.Gray)
+                    }
+                },
+                containerColor = Color(0xFF1E1E2F)
+            )
         }
 
         Card(
@@ -21348,6 +21901,10 @@ fun CyberLoginAndSignUpScreen(
                     textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
                     placeholder = { Text("yourname@domain.com", color = Color.Gray) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Email,
+                        autoCorrect = false
+                    ),
                     modifier = Modifier.fillMaxWidth().testTag("auth_email_input"),
                     leadingIcon = {
                         Icon(imageVector = Icons.Default.Email, contentDescription = null, tint = RazorTeal.copy(0.7f))
@@ -21370,6 +21927,10 @@ fun CyberLoginAndSignUpScreen(
                     label = { Text("Password", color = RazorTeal) },
                     textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                        autoCorrect = false
+                    ),
                     modifier = Modifier.fillMaxWidth().testTag("auth_password_input"),
                     visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                     leadingIcon = {
@@ -21391,6 +21952,46 @@ fun CyberLoginAndSignUpScreen(
                 )
 
                 if (!isLoginTab) {
+                    val passwordStrength = remember(passwordInput) {
+                        when {
+                            passwordInput.isEmpty() -> 0
+                            passwordInput.length < 6 -> 1
+                            passwordInput.any { it.isUpperCase() } && passwordInput.any { it.isDigit() } && passwordInput.any { !it.isLetterOrDigit() } -> 3
+                            else -> 2
+                        }
+                    }
+
+                    if (passwordInput.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        val strengthText = when (passwordStrength) {
+                            1 -> "Weak Password (Need at least 6 characters) ⚠️"
+                            2 -> "Medium Password (Add uppercase, digit, and special char) ⚙️"
+                            else -> "Strong Cryptographic Password! 🛡️"
+                        }
+                        val strengthColor = when (passwordStrength) {
+                            1 -> Color(0xFFFF5252)
+                            2 -> SafeGold
+                            else -> RazorTeal
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(if (passwordStrength >= 1) strengthColor else Color.White.copy(0.1f)))
+                            Box(modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(if (passwordStrength >= 2) strengthColor else Color.White.copy(0.1f)))
+                            Box(modifier = Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(if (passwordStrength >= 3) strengthColor else Color.White.copy(0.1f)))
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = strengthText,
+                            color = strengthColor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.align(Alignment.Start).padding(horizontal = 4.dp)
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     // Input Confirm Password
@@ -21400,6 +22001,10 @@ fun CyberLoginAndSignUpScreen(
                         label = { Text("Confirm Password", color = RazorTeal) },
                         textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
                         singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                            autoCorrect = false
+                        ),
                         modifier = Modifier.fillMaxWidth().testTag("auth_confirm_password_input"),
                         visualTransformation = if (isPasswordVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
                         leadingIcon = {
@@ -21440,7 +22045,7 @@ fun CyberLoginAndSignUpScreen(
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .heightIn(min = 48.dp)
                         .testTag("auth_submit_btn"),
                     colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
                     shape = RoundedCornerShape(12.dp),

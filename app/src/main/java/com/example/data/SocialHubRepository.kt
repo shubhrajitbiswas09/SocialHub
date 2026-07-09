@@ -181,7 +181,20 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
 
     suspend fun insertTransaction(transaction: Transaction) = dao.insertTransaction(transaction)
 
-    suspend fun sendChatMessage(message: ChatMessage): Long = dao.insertChatMessage(message)
+    suspend fun sendChatMessage(message: ChatMessage): Long {
+        val result = dao.insertChatMessage(message)
+        pruneChatMessagesIfNeeded(100) // Keep at most 100 chat messages to prevent memory overhead
+        return result
+    }
+
+    suspend fun pruneChatMessagesIfNeeded(maxLimit: Int = 100) {
+        val count = dao.getChatMessageCount()
+        if (count > maxLimit) {
+            val toDelete = count - maxLimit
+            dao.deleteOldestChatMessages(toDelete)
+        }
+    }
+
     suspend fun updateChatMessage(message: ChatMessage) = dao.updateChatMessage(message)
     suspend fun deleteChatMessage(message: ChatMessage) = dao.deleteChatMessage(message)
     suspend fun markMessagesAsSeenForSender(senderName: String) = dao.markMessagesAsSeenForSender(senderName)
@@ -317,6 +330,16 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
             android.util.Log.e("SocialHubRepo", "Populate and upload initial posts failed: ${e.message}")
         }
 
+        val calendar = java.util.Calendar.getInstance()
+        val sdf = java.text.SimpleDateFormat("MMMM dd, yyyy 'at' hh:mm a 'UTC'", java.util.Locale.US)
+        sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+
+        calendar.add(java.util.Calendar.DAY_OF_YEAR, 5)
+        val event1Date = sdf.format(calendar.time)
+
+        calendar.add(java.util.Calendar.DAY_OF_YEAR, 12)
+        val event2Date = sdf.format(calendar.time)
+
         val listEvents = listOf(
             Event(
                 id = 1,
@@ -325,7 +348,7 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
                 creatorHandle = "PixelQueen",
                 title = "Neon Genesis Collection: Private Drop Visual Live stream",
                 description = "Unlock the premier 3D hologram asset drops. Private livestream event with special early auction access lists.",
-                dateString = "June 30, 2026 at 10:00 PM UTC",
+                dateString = event1Date,
                 ticketPrice = 50.00,
                 originalAvailable = 100,
                 ticketsBought = 12,
@@ -338,7 +361,7 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
                 creatorHandle = "music_guru",
                 title = "Celestial Solstice: Live Ambient Set",
                 description = "Join an exclusive private digital live concert broadcasting live from a mountain studio at sunset. Custom visuals, spatial synthesizer streams, and real-time interactive chats.",
-                dateString = "June 25, 2026 at 09:00 PM UTC",
+                dateString = event2Date,
                 ticketPrice = 15.00,
                 originalAvailable = 150,
                 ticketsBought = 42,

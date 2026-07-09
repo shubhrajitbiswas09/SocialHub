@@ -43,8 +43,15 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     private val sp = application.getSharedPreferences("secure_hub_prefs", android.content.Context.MODE_PRIVATE)
     private val firebaseAuth: FirebaseAuth by lazy { FirebaseAuth.getInstance() }
 
+    val playBillingManager = PlayBillingManager(application, viewModelScope)
+    val billingConnectionState = playBillingManager.billingConnectionState
+    val playBillingProducts = playBillingManager.productsDetails
+
     private val _isAppUnlocked = MutableStateFlow(!sp.getBoolean("ext_biometric_startup_lock", false))
     val isAppUnlocked: StateFlow<Boolean> = _isAppUnlocked.asStateFlow()
+
+    private val _isNetworkAvailable = MutableStateFlow(true)
+    val isNetworkAvailable: StateFlow<Boolean> = _isNetworkAvailable.asStateFlow()
 
     // --- LAZY LOADING & PAGINATION MECHANISM (SERVER LOAD OPTIMIZATION) ---
     private val _postLimit = MutableStateFlow(5)
@@ -149,6 +156,54 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         fetchExternalBanners()
+        registerNetworkCallback(application)
+        viewModelScope.launch {
+            playBillingManager.billingError.collect { error ->
+                logSecurityEvent("💳 Billing: $error")
+            }
+        }
+        viewModelScope.launch {
+            playBillingManager.billingConnectionState.collect { ready ->
+                if (ready) {
+                    logSecurityEvent("💳 Google Play Billing v7 system connection established.")
+                } else {
+                    logSecurityEvent("💳 Play Billing connection standby.")
+                }
+            }
+        }
+        viewModelScope.launch {
+            playBillingManager.purchasesState.collect { purchases ->
+                purchases.forEach { purchase ->
+                    logSecurityEvent("💳 Purchase Callback: Prods ${purchase.products}, State ${purchase.purchaseState}")
+                }
+            }
+        }
+    }
+
+    private fun registerNetworkCallback(application: Application) {
+        val connectivityManager = application.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        if (connectivityManager != null) {
+            try {
+                val activeNetwork = connectivityManager.activeNetwork
+                val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
+                _isNetworkAvailable.value = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+
+                connectivityManager.registerNetworkCallback(
+                    android.net.NetworkRequest.Builder().build(),
+                    object : android.net.ConnectivityManager.NetworkCallback() {
+                        override fun onAvailable(network: android.net.Network) {
+                            _isNetworkAvailable.value = true
+                        }
+
+                        override fun onLost(network: android.net.Network) {
+                            _isNetworkAvailable.value = false
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                _isNetworkAvailable.value = true
+            }
+        }
     }
 
     fun fetchExternalBanners() {

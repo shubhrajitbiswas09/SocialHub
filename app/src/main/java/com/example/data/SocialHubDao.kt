@@ -64,6 +64,12 @@ interface SocialHubDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertChatMessage(message: ChatMessage): Long
 
+    @Query("SELECT COUNT(*) FROM chat_messages")
+    suspend fun getChatMessageCount(): Int
+
+    @Query("DELETE FROM chat_messages WHERE id IN (SELECT id FROM chat_messages ORDER BY timestamp ASC LIMIT :limit)")
+    suspend fun deleteOldestChatMessages(limit: Int)
+
     @Update
     suspend fun updateChatMessage(message: ChatMessage)
 
