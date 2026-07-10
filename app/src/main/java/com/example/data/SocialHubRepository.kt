@@ -513,4 +513,15 @@ class SocialHubRepository(private val dao: SocialHubDao, private val context: Co
             dao.insertBanner(banner)
         }
     }
+
+    suspend fun wipeAllData() = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        dao.deleteAllCreators()
+        dao.deleteAllPosts()
+        dao.deleteAllEvents()
+        dao.deleteAllProducts()
+        dao.deleteAllChatMessages()
+        dao.deleteAllTransactions()
+        dao.deleteAllSubscriptions()
+        dao.deleteAllBanners()
+    }
 }

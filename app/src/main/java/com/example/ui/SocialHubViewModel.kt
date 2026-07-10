@@ -1343,10 +1343,14 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         viewModelScope.launch {
             _isDataFetching.value = true
             try {
-                // Seed base data if empty
-                creators.first().let { list ->
-                    if (list.isEmpty()) {
-                        repository.seedInitialData()
+                // Seed base data if empty and not explicitly cleared by the user
+                val sp = getApplication<Application>().getSharedPreferences("secure_hub_prefs", android.content.Context.MODE_PRIVATE)
+                val wasCleared = sp.getBoolean("was_db_cleared", false)
+                if (!wasCleared) {
+                    creators.first().let { list ->
+                        if (list.isEmpty()) {
+                            repository.seedInitialData()
+                        }
                     }
                 }
                 triggerFirestoreSync()
@@ -2227,6 +2231,32 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
             }
         } catch (e: Exception) {
             android.util.Log.e("SocialHub", "Error unregistering network callback: ${e.message}")
+        }
+    }
+
+    fun clearAllData() {
+        viewModelScope.launch {
+            try {
+                repository.wipeAllData()
+                val sp = getApplication<Application>().getSharedPreferences("secure_hub_prefs", android.content.Context.MODE_PRIVATE)
+                sp.edit().putBoolean("was_db_cleared", true).apply()
+                showNotification("Database Reset Success", "All preview profiles, stories, and feed posts have been removed.")
+            } catch (e: java.lang.Exception) {
+                android.util.Log.e("SocialHub", "Wipe database error: ${e.message}")
+            }
+        }
+    }
+
+    fun restoreSeedData() {
+        viewModelScope.launch {
+            try {
+                val sp = getApplication<Application>().getSharedPreferences("secure_hub_prefs", android.content.Context.MODE_PRIVATE)
+                sp.edit().putBoolean("was_db_cleared", false).apply()
+                repository.seedInitialData()
+                showNotification("Preview Data Restored", "High-fidelity mock accounts and stories have been loaded successfully.")
+            } catch (e: java.lang.Exception) {
+                android.util.Log.e("SocialHub", "Restore seed error: ${e.message}")
+            }
         }
     }
 }

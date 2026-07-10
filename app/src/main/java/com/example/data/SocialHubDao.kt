@@ -117,4 +117,25 @@ interface SocialHubDao {
 
     @Query("DELETE FROM marketplace_banners")
     suspend fun deleteAllBanners()
+
+    @Query("DELETE FROM creators")
+    suspend fun deleteAllCreators()
+
+    @Query("DELETE FROM posts")
+    suspend fun deleteAllPosts()
+
+    @Query("DELETE FROM events")
+    suspend fun deleteAllEvents()
+
+    @Query("DELETE FROM marketplace_products")
+    suspend fun deleteAllProducts()
+
+    @Query("DELETE FROM chat_messages")
+    suspend fun deleteAllChatMessages()
+
+    @Query("DELETE FROM transactions")
+    suspend fun deleteAllTransactions()
+
+    @Query("DELETE FROM subscriptions")
+    suspend fun deleteAllSubscriptions()
 }

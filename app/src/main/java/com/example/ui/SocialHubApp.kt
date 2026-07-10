@@ -11686,111 +11686,8 @@ fun CreatorDetailScreen(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        // Interactive Tab Selector (Posts, Subscriptions, Shop, Analytics)
-        var activeProfileTab by remember { mutableStateOf("feed") }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .background(Color(0xFF130E29), RoundedCornerShape(12.dp))
-                .border(1.dp, RazorBlue.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-                .padding(4.dp)
-        ) {
-            // Tab 1: Feed (including Publications / Reels)
-            Button(
-                onClick = { activeProfileTab = "feed" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (activeProfileTab == "feed") RazorTeal else Color.Transparent,
-                    contentColor = if (activeProfileTab == "feed") Color.Black else Color.White
-                ),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1f),
-                contentPadding = PaddingValues(vertical = 4.dp),
-                elevation = null
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    Icon(
-                        imageVector = Icons.Default.GridView,
-                        contentDescription = "Posts and reels feed",
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text("Posts", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                }
-            }
-
-            // Tab 2: Premium Subscription Options
-            Button(
-                onClick = { activeProfileTab = "subscriptions" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (activeProfileTab == "subscriptions") RazorTeal else Color.Transparent,
-                    contentColor = if (activeProfileTab == "subscriptions") Color.Black else Color.White
-                ),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1.3f),
-                contentPadding = PaddingValues(vertical = 4.dp),
-                elevation = null
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = "Premium Subscription Tiers",
-                        modifier = Modifier.size(12.dp),
-                        tint = if (activeProfileTab == "subscriptions") Color.Black else Color(0xFFFFD54F)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text("Subscription", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                }
-            }
-
-            // Tab 3: Shop & Tips
-            Button(
-                onClick = { activeProfileTab = "shop" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (activeProfileTab == "shop") RazorTeal else Color.Transparent,
-                    contentColor = if (activeProfileTab == "shop") Color.Black else Color.White
-                ),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1.2f),
-                contentPadding = PaddingValues(vertical = 4.dp),
-                elevation = null
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Storefront,
-                        contentDescription = "Digital Shop & Tips",
-                        modifier = Modifier.size(12.dp),
-                        tint = if (activeProfileTab == "shop") Color.Black else RazorBlue
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text("Shop & Tips", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                }
-            }
-
-            // Tab 4: Analytics
-            Button(
-                onClick = { activeProfileTab = "analytics" },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (activeProfileTab == "analytics") RazorTeal else Color.Transparent,
-                    contentColor = if (activeProfileTab == "analytics") Color.Black else Color.White
-                ),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.weight(1.1f),
-                contentPadding = PaddingValues(vertical = 4.dp),
-                elevation = null
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Insights,
-                        contentDescription = "Profile Analytics",
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(3.dp))
-                    Text("Analytics", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                }
-            }
-        }
+        // Set the activeProfileTab statically to "feed" to only show the Posts/Publications option
+        val activeProfileTab = "feed"
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -21011,6 +20908,74 @@ fun SettingsScreen(
                                 fontSize = 11.sp,
                                 lineHeight = 16.sp
                             )
+                        }
+                    }
+                }
+            }
+            
+            // Section 5.5: Data Management & Reset
+            item {
+                Text(
+                    text = "Data Management",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
+                )
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF16161D)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Text(
+                            text = "Manage Seed & Preview Accounts",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Initial launch seeds mock creator profiles and stories so you can preview the full social hub experience. Wiping them prepares the database for real local accounts.",
+                            color = Color.Gray,
+                            fontSize = 11.sp,
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    pendingActionDialogTitle = "WIPE PREVIEW PROFILES?"
+                                    pendingActionDialogMessage = "Are you sure you want to completely remove all seed accounts, feed posts, stories, and chat messages? This prepares the app for real users."
+                                    pendingActionOnConfirm = { viewModel.clearAllData() }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F).copy(alpha = 0.15f), contentColor = Color(0xFFEF5350)),
+                                border = BorderStroke(1.dp, Color(0xFFEF5350).copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("Wipe Preview Data", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    viewModel.restoreSeedData()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = RazorTeal.copy(alpha = 0.15f), contentColor = RazorTeal),
+                                border = BorderStroke(1.dp, RazorTeal.copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f).height(38.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text("Restore Preview Data", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                            }
                         }
                     }
                 }
