@@ -429,6 +429,7 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
     val userLink by viewModel.userProfileLink.collectAsStateWithLifecycle()
     val userDp by viewModel.userProfileDp.collectAsStateWithLifecycle()
     val userBanner by viewModel.userProfileBanner.collectAsStateWithLifecycle()
+    val userVibeIndex by viewModel.userVibeIndex.collectAsStateWithLifecycle()
 
     val userVerified by viewModel.userVerified.collectAsStateWithLifecycle()
     val userBronzeName by viewModel.userBronzeName.collectAsStateWithLifecycle()
@@ -878,7 +879,8 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                                 viewModel.navigateTo(Screen.CreatorDetail(creatorId))
                                             },
                                             onVideoClick = { activeInAppVideoPost = it },
-                                            onLoadMorePosts = { viewModel.loadMorePosts() }
+                                            onLoadMorePosts = { viewModel.loadMorePosts() },
+                                            userVibeIndex = userVibeIndex
                                         )
                                     }
                                 }
@@ -1013,6 +1015,8 @@ fun SocialHubApp(viewModel: SocialHubViewModel) {
                                 userLink = userLink,
                                 userDp = userDp,
                                 userBanner = userBanner,
+                                userVibeIndex = userVibeIndex,
+                                onUpdateVibe = { viewModel.setUserVibe(it) },
                                 onUpdateProfile = { name, handle, bio, link, dp, banner -> viewModel.updateProfile(name, handle, bio, link, dp, banner) },
                                 onLoadFunds = { viewModel.addWalletFunds(it) },
                                 onLoadFundsViaUPI = { amt, upiId, txHash -> viewModel.addWalletFundsViaUPI(amt, upiId, txHash) },
@@ -1231,8 +1235,10 @@ fun FeedScreen(
     onDiscoverCreators: () -> Unit,
     onCreatorClick: (String) -> Unit,
     onVideoClick: (Post) -> Unit = {},
-    onLoadMorePosts: () -> Unit = {}
+    onLoadMorePosts: () -> Unit = {},
+    userVibeIndex: Int = 0
 ) {
+    val localVibeIndex = userVibeIndex
     var showStoryStudio by remember { mutableStateOf(false) }
     var showNewPostDialog by remember { mutableStateOf(false) }
 
@@ -1887,7 +1893,8 @@ fun FeedScreen(
                         snaps = creatorSnaps,
                         subscriptions = subscriptions,
                         onSnapClick = { activePlayingSnap = it },
-                        onCreateStoryClick = { showStoryStudio = true }
+                        onCreateStoryClick = { showStoryStudio = true },
+                        userVibeIndex = localVibeIndex
                     )
                 }
 
@@ -3166,7 +3173,8 @@ fun StoriesBar(
     snaps: List<CreatorSnap>,
     subscriptions: List<Subscription>,
     onSnapClick: (CreatorSnap) -> Unit,
-    onCreateStoryClick: () -> Unit
+    onCreateStoryClick: () -> Unit,
+    userVibeIndex: Int = 0
 ) {
     Card(
         modifier = Modifier
@@ -3204,9 +3212,15 @@ fun StoriesBar(
                                         )
                                     )
                                     .border(
-                                        2.dp, 
-                                        Brush.linearGradient(listOf(RazorTeal, RazorBlue)), 
-                                        CircleShape
+                                        width = 3.dp,
+                                        brush = when (userVibeIndex) {
+                                            1 -> Brush.linearGradient(colors = listOf(Color(0xFFFF007F), Color(0xFFFF5E62))) // Love Neon Vibe
+                                            2 -> Brush.linearGradient(colors = listOf(Color(0xFF00FFCC), Color(0xFF3A7BD5))) // Deep Sea Vibe
+                                            3 -> Brush.linearGradient(colors = listOf(Color(0xFFFFB300), Color(0xFFF7797D))) // Cosmic Sunset
+                                            4 -> Brush.linearGradient(colors = listOf(Color(0xFF8A2387), Color(0xFFE94057))) // Matrix Aura
+                                            else -> Brush.linearGradient(colors = listOf(RazorTeal, RazorBlue)) // Default Aura
+                                        },
+                                        shape = CircleShape
                                     ),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -7219,19 +7233,79 @@ fun ChatScreen(
     } else {
         // --- CHAT WINDOW (WHATSAPP-INSPIRED GLASSMORPHIC CHATROOM) ---
         val recipientName = activeThreadRecipient ?: ""
+        var chatThemeIndex by remember { mutableStateOf(0) }
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
-                    // Deep cosmic dark space gradient
-                    val gradientBrush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFF0F0822), // Top dark space violet
-                            Color(0xFF05030A)  // Bottom matte black
-                        )
-                    )
-                    drawRect(brush = gradientBrush)
+                    when (chatThemeIndex) {
+                        1 -> {
+                            // Theme 1: Neon Grid Hologram
+                            drawRect(color = Color(0xFF030A1C))
+                            val gridSpacing = 40.dp.toPx()
+                            val lineOpacity = 0.08f
+                            var y = 0f
+                            while (y < size.height) {
+                                drawLine(
+                                    color = RazorTeal,
+                                    start = Offset(0f, y),
+                                    end = Offset(size.width, y),
+                                    strokeWidth = 1f,
+                                    alpha = lineOpacity
+                                )
+                                y += gridSpacing
+                            }
+                            var x = 0f
+                            while (x < size.width) {
+                                drawLine(
+                                    color = RazorTeal,
+                                    start = Offset(x, 0f),
+                                    end = Offset(x, size.height),
+                                    strokeWidth = 1f,
+                                    alpha = lineOpacity
+                                )
+                                x += gridSpacing
+                            }
+                        }
+                        2 -> {
+                            // Theme 2: Solar Flare
+                            drawRect(color = Color(0xFF14070B))
+                            drawCircle(
+                                brush = Brush.radialGradient(
+                                    colors = listOf(Color(0xFFFF5E62).copy(alpha = 0.2f), Color.Transparent),
+                                    center = Offset(size.width / 2f, size.height / 3f),
+                                    radius = size.width
+                                )
+                            )
+                        }
+                        3 -> {
+                            // Theme 3: Cyberpunk Hologram
+                            drawRect(color = Color(0xFF0D0315))
+                            val gridSpacing = 8.dp.toPx()
+                            var y = 0f
+                            while (y < size.height) {
+                                drawLine(
+                                    color = Color(0xFFFF007F),
+                                    start = Offset(0f, y),
+                                    end = Offset(size.width, y),
+                                    strokeWidth = 1f,
+                                    alpha = 0.03f
+                                )
+                                y += gridSpacing
+                            }
+                        }
+                        else -> {
+                            // Theme 0: Deep Cosmic
+                            val gradientBrush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF0F0822),
+                                    Color(0xFF05030A)
+                                )
+                            )
+                            drawRect(brush = gradientBrush)
+                        }
+                    }
                 }
         ) {
             // Header: Glassmorphic Floating Top Bar
@@ -7322,6 +7396,24 @@ fun ChatScreen(
                             fontSize = 10.sp
                         )
                     }
+                }
+
+                // Holographic Theme Switcher Button
+                IconButton(
+                    onClick = { chatThemeIndex = (chatThemeIndex + 1) % 4 },
+                    modifier = Modifier.padding(end = 4.dp).size(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Palette,
+                        contentDescription = "Holographic Themes",
+                        tint = when (chatThemeIndex) {
+                            1 -> RazorTeal
+                            2 -> Color(0xFFFF5E62)
+                            3 -> Color(0xFFFF007F)
+                            else -> Color.White
+                        },
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
                 // Small secure padlock badge in header
@@ -8298,6 +8390,8 @@ fun WalletScreen(
     userLink: String = "",
     userDp: String = "",
     userBanner: String = "",
+    userVibeIndex: Int = 0,
+    onUpdateVibe: (Int) -> Unit = {},
     onUpdateProfile: (String, String, String, String, String, String) -> Unit,
     onLoadFunds: (Double) -> Unit,
     onLoadFundsViaUPI: (Double, String, String) -> Unit = { _, _, _ -> },
@@ -8496,6 +8590,7 @@ fun WalletScreen(
     var editLink by remember(userLink) { mutableStateOf(userLink) }
     var editDpUri by remember(userDp) { mutableStateOf(userDp) }
     var editBannerUri by remember(userBanner) { mutableStateOf(userBanner) }
+    var editVibeIndex by remember(userVibeIndex) { mutableStateOf(userVibeIndex) }
     var sizeErrorMessage by remember { mutableStateOf<String?>(null) }
 
     val dpLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -8857,6 +8952,55 @@ fun WalletScreen(
                             }
                         }
                     }
+                    
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Text("Select Creator Aura (Glow Effect)", color = GrayText, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "Default" to Color(0xFF00FF88),
+                            "Love" to Color(0xFFFF007F),
+                            "Ocean" to Color(0xFF00FFCC),
+                            "Sunset" to Color(0xFFFFB300),
+                            "Matrix" to Color(0xFF8A2387)
+                        ).forEachIndexed { idx, pair ->
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (editVibeIndex == idx) pair.second.copy(alpha = 0.2f) else Color(0xFF130E26))
+                                    .border(
+                                        width = if (editVibeIndex == idx) 2.dp else 1.dp,
+                                        color = if (editVibeIndex == idx) pair.second else Color.White.copy(alpha = 0.08f),
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { editVibeIndex = idx }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clip(CircleShape)
+                                            .background(pair.second)
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = pair.first,
+                                        color = if (editVibeIndex == idx) Color.White else GrayText,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
                     Spacer(modifier = Modifier.height(24.dp))
                     
                     Row(
@@ -8874,6 +9018,7 @@ fun WalletScreen(
                             onClick = {
                                 if (editName.isNotBlank() && editHandle.isNotBlank() && !isBioExceeded) {
                                     onUpdateProfile(editName, editHandle, editBio, editLink, editDpUri, editBannerUri)
+                                    onUpdateVibe(editVibeIndex)
                                     successMessageToast = "Profile updated successfully! 🎉"
                                     showProfileEditor = false
                                 }

@@ -174,6 +174,9 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     private val _userProfileBanner = MutableStateFlow("")
     val userProfileBanner: StateFlow<String> = _userProfileBanner.asStateFlow()
 
+    private val _userVibeIndex = MutableStateFlow(0)
+    val userVibeIndex: StateFlow<Int> = _userVibeIndex.asStateFlow()
+
     private val _userEmail = MutableStateFlow(sp.getString("user_email", "") ?: "")
     val userEmail: StateFlow<String> = _userEmail.asStateFlow()
 
@@ -1166,6 +1169,9 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         val savedLink = sp.getString("profile_link_$email", null)
         val savedDp = sp.getString("profile_dp_$email", null)
         val savedBanner = sp.getString("profile_banner_$email", null)
+        val savedVibe = sp.getInt("profile_vibe_$email", 0)
+
+        _userVibeIndex.value = savedVibe
 
         if (savedName != null) {
             _userProfileName.value = savedName
@@ -1196,9 +1202,19 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
                 .putString("profile_link_$email", _userProfileLink.value)
                 .putString("profile_dp_$email", "")
                 .putString("profile_banner_$email", "")
+                .putInt("profile_vibe_$email", 0)
                 .apply()
         }
     }
+
+    fun setUserVibe(index: Int) {
+        _userVibeIndex.value = index
+        val email = _userEmail.value
+        if (email.isNotBlank()) {
+            sp.edit().putInt("profile_vibe_$email", index).apply()
+        }
+    }
+
     private val _isDataFetching = MutableStateFlow(false)
     val isDataFetching: StateFlow<Boolean> = _isDataFetching.asStateFlow()
 
