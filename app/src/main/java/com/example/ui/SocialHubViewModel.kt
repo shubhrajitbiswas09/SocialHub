@@ -53,6 +53,8 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     private val _isNetworkAvailable = MutableStateFlow(true)
     val isNetworkAvailable: StateFlow<Boolean> = _isNetworkAvailable.asStateFlow()
 
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
     // --- LAZY LOADING & PAGINATION MECHANISM (SERVER LOAD OPTIMIZATION) ---
     private val _postLimit = MutableStateFlow(5)
     val postLimit: StateFlow<Int> = _postLimit.asStateFlow()
@@ -154,6 +156,27 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     private val _externalBannersState = MutableStateFlow<BannersApiState>(BannersApiState.Loading)
     val externalBannersState: StateFlow<BannersApiState> = _externalBannersState.asStateFlow()
 
+    private val _userProfileName = MutableStateFlow("Mario's Pizza")
+    val userProfileName: StateFlow<String> = _userProfileName.asStateFlow()
+    
+    private val _userProfileHandle = MutableStateFlow("MarioPizza45")
+    val userProfileHandle: StateFlow<String> = _userProfileHandle.asStateFlow()
+
+    private val _userProfileBio = MutableStateFlow("🚀 SocialHub Pro Creator & Digital Pioneer • Crafting dynamic high-fidelity presets, premium streams, and decentralised channel nodes.")
+    val userProfileBio: StateFlow<String> = _userProfileBio.asStateFlow()
+
+    private val _userProfileLink = MutableStateFlow("socialhub.network/creator/MarioPizza45")
+    val userProfileLink: StateFlow<String> = _userProfileLink.asStateFlow()
+
+    private val _userProfileDp = MutableStateFlow("")
+    val userProfileDp: StateFlow<String> = _userProfileDp.asStateFlow()
+
+    private val _userProfileBanner = MutableStateFlow("")
+    val userProfileBanner: StateFlow<String> = _userProfileBanner.asStateFlow()
+
+    private val _userEmail = MutableStateFlow(sp.getString("user_email", "") ?: "")
+    val userEmail: StateFlow<String> = _userEmail.asStateFlow()
+
     init {
         fetchExternalBanners()
         registerNetworkCallback(application)
@@ -178,6 +201,11 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
         }
+        viewModelScope.launch {
+            _userEmail.collect { email ->
+                loadUserProfile(email)
+            }
+        }
     }
 
     private fun registerNetworkCallback(application: Application) {
@@ -188,17 +216,19 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
                 val capabilities = connectivityManager.getNetworkCapabilities(activeNetwork)
                 _isNetworkAvailable.value = capabilities?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
 
+                val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: android.net.Network) {
+                        _isNetworkAvailable.value = true
+                    }
+
+                    override fun onLost(network: android.net.Network) {
+                        _isNetworkAvailable.value = false
+                    }
+                }
+                networkCallback = callback
                 connectivityManager.registerNetworkCallback(
                     android.net.NetworkRequest.Builder().build(),
-                    object : android.net.ConnectivityManager.NetworkCallback() {
-                        override fun onAvailable(network: android.net.Network) {
-                            _isNetworkAvailable.value = true
-                        }
-
-                        override fun onLost(network: android.net.Network) {
-                            _isNetworkAvailable.value = false
-                        }
-                    }
+                    callback
                 )
             } catch (e: Exception) {
                 _isNetworkAvailable.value = true
@@ -864,9 +894,6 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         return true
     }
 
-    private val _userEmail = MutableStateFlow(sp.getString("user_email", "") ?: "")
-    val userEmail: StateFlow<String> = _userEmail.asStateFlow()
-
     private val _isEmailVerified = MutableStateFlow(
         sp.getBoolean("is_verified_${sp.getString("user_email", "")}", false)
     )
@@ -1101,24 +1128,6 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     private val _chatEncryptionEnabled = MutableStateFlow(true)
     val chatEncryptionEnabled: StateFlow<Boolean> = _chatEncryptionEnabled.asStateFlow()
 
-    private val _userProfileName = MutableStateFlow("Mario's Pizza")
-    val userProfileName: StateFlow<String> = _userProfileName.asStateFlow()
-    
-    private val _userProfileHandle = MutableStateFlow("MarioPizza45")
-    val userProfileHandle: StateFlow<String> = _userProfileHandle.asStateFlow()
-
-    private val _userProfileBio = MutableStateFlow("🚀 SocialHub Pro Creator & Digital Pioneer • Crafting dynamic high-fidelity presets, premium streams, and decentralised channel nodes.")
-    val userProfileBio: StateFlow<String> = _userProfileBio.asStateFlow()
-
-    private val _userProfileLink = MutableStateFlow("socialhub.network/creator/MarioPizza45")
-    val userProfileLink: StateFlow<String> = _userProfileLink.asStateFlow()
-
-    private val _userProfileDp = MutableStateFlow("")
-    val userProfileDp: StateFlow<String> = _userProfileDp.asStateFlow()
-
-    private val _userProfileBanner = MutableStateFlow("")
-    val userProfileBanner: StateFlow<String> = _userProfileBanner.asStateFlow()
-
     fun updateProfile(name: String, handle: String, bio: String, link: String, dpUri: String, bannerUri: String) {
         _userProfileName.value = name
         _userProfileHandle.value = handle
@@ -1126,6 +1135,69 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         _userProfileLink.value = link
         _userProfileDp.value = dpUri
         _userProfileBanner.value = bannerUri
+
+        val email = _userEmail.value
+        if (email.isNotBlank()) {
+            sp.edit()
+                .putString("profile_name_$email", name)
+                .putString("profile_handle_$email", handle)
+                .putString("profile_bio_$email", bio)
+                .putString("profile_link_$email", link)
+                .putString("profile_dp_$email", dpUri)
+                .putString("profile_banner_$email", bannerUri)
+                .apply()
+        }
+    }
+
+    fun loadUserProfile(email: String) {
+        if (email.isBlank()) {
+            _userProfileName.value = "Mario's Pizza"
+            _userProfileHandle.value = "MarioPizza45"
+            _userProfileBio.value = "🚀 SocialHub Pro Creator & Digital Pioneer • Crafting dynamic high-fidelity presets, premium streams, and decentralised channel nodes."
+            _userProfileLink.value = "socialhub.network/creator/MarioPizza45"
+            _userProfileDp.value = ""
+            _userProfileBanner.value = ""
+            return
+        }
+
+        val savedName = sp.getString("profile_name_$email", null)
+        val savedHandle = sp.getString("profile_handle_$email", null)
+        val savedBio = sp.getString("profile_bio_$email", null)
+        val savedLink = sp.getString("profile_link_$email", null)
+        val savedDp = sp.getString("profile_dp_$email", null)
+        val savedBanner = sp.getString("profile_banner_$email", null)
+
+        if (savedName != null) {
+            _userProfileName.value = savedName
+            _userProfileHandle.value = savedHandle ?: ""
+            _userProfileBio.value = savedBio ?: ""
+            _userProfileLink.value = savedLink ?: ""
+            _userProfileDp.value = savedDp ?: ""
+            _userProfileBanner.value = savedBanner ?: ""
+        } else {
+            val prefix = email.substringBefore("@")
+            val cleanName = prefix.replace(Regex("[._+-]"), " ")
+                .split(" ")
+                .filter { it.isNotEmpty() }
+                .joinToString(" ") { it.replaceFirstChar { char -> if (char.isLowerCase()) char.titlecase() else char.toString() } }
+            val handle = prefix.replace(Regex("[^a-zA-Z0-9]"), "")
+
+            _userProfileName.value = cleanName
+            _userProfileHandle.value = handle
+            _userProfileBio.value = "🚀 SocialHub Pro Creator & Digital Pioneer • Crafting dynamic high-fidelity presets, premium streams, and decentralised channel nodes."
+            _userProfileLink.value = "socialhub.network/creator/$handle"
+            _userProfileDp.value = ""
+            _userProfileBanner.value = ""
+
+            sp.edit()
+                .putString("profile_name_$email", cleanName)
+                .putString("profile_handle_$email", handle)
+                .putString("profile_bio_$email", _userProfileBio.value)
+                .putString("profile_link_$email", _userProfileLink.value)
+                .putString("profile_dp_$email", "")
+                .putString("profile_banner_$email", "")
+                .apply()
+        }
     }
     private val _isDataFetching = MutableStateFlow(false)
     val isDataFetching: StateFlow<Boolean> = _isDataFetching.asStateFlow()
@@ -1484,35 +1556,43 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
     fun likePost(post: Post) {
         if (!validateRequest("Like Post", "ID: ${post.id}")) return
         viewModelScope.launch {
-            val latestPost = repository.getPostById(post.id) ?: post
-            val updatedLikedState = !latestPost.isLiked
-            val updatedLikesCount = if (updatedLikedState) {
-                latestPost.likesCount + 1
-            } else {
-                (latestPost.likesCount - 1).coerceAtLeast(0)
+            try {
+                val latestPost = repository.getPostById(post.id) ?: post
+                val updatedLikedState = !latestPost.isLiked
+                val updatedLikesCount = if (updatedLikedState) {
+                    latestPost.likesCount + 1
+                } else {
+                    (latestPost.likesCount - 1).coerceAtLeast(0)
+                }
+                repository.updatePost(latestPost.copy(isLiked = updatedLikedState, likesCount = updatedLikesCount))
+            } catch (e: Exception) {
+                android.util.Log.e("SocialHub", "Error liking post: ${e.message}")
             }
-            repository.updatePost(latestPost.copy(isLiked = updatedLikedState, likesCount = updatedLikesCount))
         }
     }
 
     // Toggle follow/unfollow status for a creator
     fun toggleFollow(creator: Creator) {
         viewModelScope.launch {
-            val updatedCreator = creator.copy(
-                isFollowed = !creator.isFollowed,
-                followersCount = if (creator.isFollowed) {
-                    (creator.followersCount - 1).coerceAtLeast(0)
-                } else {
-                    creator.followersCount + 1
-                }
-            )
-            repository.updateCreator(updatedCreator)
-            val actionWord = if (updatedCreator.isFollowed) "followed" else "unfollowed"
-            showNotification("Success", "You have successfully $actionWord @${creator.handle}!")
             try {
-                triggerFirestoreSync()
+                val updatedCreator = creator.copy(
+                    isFollowed = !creator.isFollowed,
+                    followersCount = if (creator.isFollowed) {
+                        (creator.followersCount - 1).coerceAtLeast(0)
+                    } else {
+                        creator.followersCount + 1
+                    }
+                )
+                repository.updateCreator(updatedCreator)
+                val actionWord = if (updatedCreator.isFollowed) "followed" else "unfollowed"
+                showNotification("Success", "You have successfully $actionWord @${creator.handle}!")
+                try {
+                    triggerFirestoreSync()
+                } catch (e: Exception) {
+                    android.util.Log.e("SocialHub", "Follow sync error: ${e.message}")
+                }
             } catch (e: Exception) {
-                android.util.Log.e("SocialHub", "Follow sync error: ${e.message}")
+                android.util.Log.e("SocialHub", "Error updating creator follow status: ${e.message}")
             }
         }
     }
@@ -1847,27 +1927,31 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
         if (caption.isBlank()) return
         if (!validateRequest("Publish Post", "Caption: ${caption.take(15)}")) return
         viewModelScope.launch {
-            val cId = creator?.id ?: "pixel_queen"
-            val cName = creator?.name ?: _userProfileName.value
-            val cHandle = creator?.handle ?: _userProfileHandle.value
-            val post = Post(
-                creatorId = cId,
-                creatorName = cName,
-                creatorHandle = cHandle,
-                creatorAvatar = if (creator != null) creator.id else "",
-                caption = caption,
-                contentImage = attachedMediaType ?: listOf("vector_creative", "gradient_neon", "cyberpunk_city", "neon_synthwave").random(),
-                isPremium = false,
-                likesCount = 0,
-                tipsTotal = 0.0,
-                timestamp = System.currentTimeMillis()
-            )
-            repository.insertPost(post)
-            showNotification("Post Published 🎉", "New post by @$cHandle has been uploaded successfully!")
             try {
-                triggerFirestoreSync()
+                val cId = creator?.id ?: "pixel_queen"
+                val cName = creator?.name ?: _userProfileName.value
+                val cHandle = creator?.handle ?: _userProfileHandle.value
+                val post = Post(
+                    creatorId = cId,
+                    creatorName = cName,
+                    creatorHandle = cHandle,
+                    creatorAvatar = if (creator != null) creator.id else "",
+                    caption = caption,
+                    contentImage = attachedMediaType ?: listOf("vector_creative", "gradient_neon", "cyberpunk_city", "neon_synthwave").random(),
+                    isPremium = false,
+                    likesCount = 0,
+                    tipsTotal = 0.0,
+                    timestamp = System.currentTimeMillis()
+                )
+                repository.insertPost(post)
+                showNotification("Post Published 🎉", "New post by @$cHandle has been uploaded successfully!")
+                try {
+                    triggerFirestoreSync()
+                } catch (e: Exception) {
+                    android.util.Log.e("SocialHub", "Publish post sync error: ${e.message}")
+                }
             } catch (e: Exception) {
-                android.util.Log.e("SocialHub", "Publish post sync error: ${e.message}")
+                android.util.Log.e("SocialHub", "Error inserting post: ${e.message}")
             }
         }
     }
@@ -2132,6 +2216,18 @@ class SocialHubViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun clearTopicInsight() {
         _selectedTopicInsight.value = null
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            networkCallback?.let { callback ->
+                val connectivityManager = getApplication<Application>().getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                connectivityManager?.unregisterNetworkCallback(callback)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("SocialHub", "Error unregistering network callback: ${e.message}")
+        }
     }
 }
 

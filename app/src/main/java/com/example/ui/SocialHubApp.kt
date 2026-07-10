@@ -9268,7 +9268,7 @@ fun WalletScreen(
                 )
                 .verticalScroll(rememberScrollState())
         ) {
-        // Premium Header with WELCOME BACK, edit info, and top-right Settings
+        // Premium Header with SocialHub Branding matching home/other screens, left/right buttons kept
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -9292,71 +9292,38 @@ fun WalletScreen(
                     )
                 }
             }
-            // Circle avatar with green/cyan neon glow border
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(Color(0xFF00E676), Color(0xFF00B0FF))
-                        )
-                    )
-                    .padding(3.dp),
-                contentAlignment = Alignment.Center
+
+            // SocialHub Branding - Same as Home Screen style
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .size(36.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF0E0B19)),
+                        .background(
+                            Brush.linearGradient(
+                                colors = listOf(RazorBlue, RazorTeal)
+                            )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = if (userDp.startsWith("content://") || userDp.startsWith("/data/")) userDp else "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=250",
-                        contentDescription = "User High-Res Avatar",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-            ) {
-                Text(
-                    text = "WELCOME BACK",
-                    color = Color(0xFF00FF88),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.2.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     Text(
-                        text = userName,
-                        color = Color.White,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Black
+                        text = "S",
+                        color = Color.Black,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 18.sp
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(
-                        onClick = { showProfileEditor = true },
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Profile Info",
-                            tint = Color(0xFF00FF88),
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
                 }
+                Text(
+                    text = "SocialHub",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 0.5.sp,
+                    color = Color.White
+                )
             }
 
             // External in-app settings icon in the upper-right corner that navigates to settings screen
@@ -9996,7 +9963,7 @@ fun WalletScreen(
         Spacer(modifier = Modifier.height(24.dp))
         } else {
             // Personal Creator Profile Component (Enhanced Instagram-Style High-Fidelity UI matching user screenshot)
-            val myPosts = posts.filter { it.creatorHandle == userHandle || it.creatorId == "pixel_queen" || it.creatorName == userName }
+            val myPosts = posts.filter { it.creatorId == "current_user" || it.creatorHandle == userHandle || it.creatorName == userName }
 
             Card(
                 modifier = Modifier
@@ -10085,16 +10052,16 @@ fun WalletScreen(
                                                     .fillMaxSize()
                                                     .background(
                                                         Brush.linearGradient(
-                                                            colors = listOf(Color(0xFF00C853), Color(0xFF2E7D32))
+                                                            colors = listOf(RazorBlue, RazorTeal)
                                                         )
                                                     ),
                                                 contentAlignment = Alignment.Center
                                             ) {
                                                 Text(
-                                                    text = userName.take(1).uppercase(),
-                                                    color = Color.White,
-                                                    fontSize = 32.sp,
-                                                    fontWeight = FontWeight.Black
+                                                    text = "S",
+                                                    color = Color.Black,
+                                                    fontWeight = FontWeight.Black,
+                                                    fontSize = 32.sp
                                                 )
                                             }
                                         }
@@ -16963,7 +16930,7 @@ fun CommentDialog(
                             .background(RazorBlue.copy(0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (post.creatorAvatar.startsWith("http")) {
+                        if (post.creatorAvatar.startsWith("http") || post.creatorAvatar.startsWith("content://") || post.creatorAvatar.startsWith("/data/")) {
                             AsyncImage(
                                 model = post.creatorAvatar,
                                 contentDescription = "Creator Avatar",

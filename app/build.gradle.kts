@@ -5,6 +5,7 @@ plugins {
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -96,6 +97,8 @@ dependencies {
   implementation(libs.firebase.ai)
   implementation(libs.firebase.firestore)
   implementation(libs.firebase.auth)
+  implementation(libs.firebase.crashlytics)
+  implementation(libs.firebase.analytics)
   implementation(libs.play.services.auth)
   implementation(libs.play.billing)
   implementation(libs.kotlinx.coroutines.android)
