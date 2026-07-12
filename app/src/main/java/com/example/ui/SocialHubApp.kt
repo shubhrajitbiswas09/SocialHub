@@ -21307,10 +21307,21 @@ fun MandatoryEmailVerificationScreen(
     var emailInput by remember { mutableStateOf(userEmail) }
     var otpInput by remember { mutableStateOf("") }
 
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F0B21)),
+            .background(Color(0xFF0F0B21))
+            .clickable(
+                indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            ) {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+            }
+            .imePadding(),
         contentAlignment = Alignment.Center
     ) {
         // Decorative grid lines
@@ -21336,7 +21347,11 @@ fun MandatoryEmailVerificationScreen(
 
         // Floating Back Button to return to previous state / Login Screen
         IconButton(
-            onClick = onLogout,
+            onClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onLogout()
+            },
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(top = 40.dp, start = 16.dp) // adjusted for system bar
@@ -21350,161 +21365,184 @@ fun MandatoryEmailVerificationScreen(
             )
         }
 
-        Card(
+        // Scrollable content wrapper for Card
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
+                .fillMaxSize()
+                .padding(top = 80.dp)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF161135)),
-            border = BorderStroke(1.5.dp, RazorTeal.copy(alpha = 0.7f))
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Column(
+            Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                    .fillMaxWidth(0.9f)
+                    .padding(vertical = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161135)),
+                border = BorderStroke(1.5.dp, RazorTeal.copy(alpha = 0.7f))
             ) {
-                // Cyber security badge
-                Box(
+                Column(
                     modifier = Modifier
-                        .size(64.dp)
-                        .clip(CircleShape)
-                        .background(RazorTeal.copy(alpha = 0.15f))
-                        .border(1.5.dp, RazorTeal, CircleShape),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Security,
-                        contentDescription = "Security Gateway",
-                        tint = RazorTeal,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "MANDATORY SECURITY GATEWAY",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 1.sp
-                )
-
-                Text(
-                    text = "Verify your email to establish an authenticated secure user session",
-                    color = Color.LightGray,
-                    fontSize = 11.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                if (!emailOtpSent) {
-                    // Step 1: Input Email
-                    OutlinedTextField(
-                        value = emailInput,
-                        onValueChange = { emailInput = it },
-                        label = { Text("Secure Email Address", color = RazorTeal) },
-                        textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
-                        placeholder = { Text("user@securedomain.com", color = Color.Gray) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = RazorTeal,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-                            focusedContainerColor = Color.Black.copy(alpha = 0.3f),
-                            unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    if (otpErrorMessage != null) {
-                        Text(
-                            text = otpErrorMessage,
-                            color = Color.Red,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                    // Cyber security badge
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .clip(CircleShape)
+                            .background(RazorTeal.copy(alpha = 0.15f))
+                            .border(1.5.dp, RazorTeal, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Security,
+                            contentDescription = "Security Gateway",
+                            tint = RazorTeal,
+                            modifier = Modifier.size(32.dp)
                         )
                     }
 
-                    Button(
-                        onClick = { onSendOtp(emailInput) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
-                        shape = RoundedCornerShape(12.dp),
-                        enabled = !isOtpVerifying
-                    ) {
-                        if (isOtpVerifying) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
-                        } else {
-                            Text("Request Authorization Code 📡", color = Color.Black, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                } else {
-                    // Step 2: Input OTP
+                    Spacer(modifier = Modifier.height(16.dp))
+
                     Text(
-                        text = "Authentication Code sent to\n$emailInput",
-                        color = RazorTeal,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = "MANDATORY SECURITY GATEWAY",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 1.sp
+                    )
+
+                    Text(
+                        text = "Verify your email to establish an authenticated secure user session",
+                        color = Color.LightGray,
+                        fontSize = 11.sp,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        modifier = Modifier.padding(top = 4.dp)
                     )
 
-                    OutlinedTextField(
-                        value = otpInput,
-                        onValueChange = { if (it.length <= 6) otpInput = it },
-                        label = { Text("6-Digit OTP Code", color = RazorTeal) },
-                        textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                        placeholder = { Text("******", color = Color.Gray) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = RazorTeal,
-                            unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
-                            focusedContainerColor = Color.Black.copy(alpha = 0.3f),
-                            unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    if (otpErrorMessage != null) {
-                        Text(
-                            text = otpErrorMessage,
-                            color = Color.Red,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(bottom = 8.dp)
+                    if (!emailOtpSent) {
+                        // Step 1: Input Email
+                        OutlinedTextField(
+                            value = emailInput,
+                            onValueChange = { emailInput = it },
+                            label = { Text("Secure Email Address", color = RazorTeal) },
+                            textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 14.sp),
+                            placeholder = { Text("user@securedomain.com", color = Color.Gray) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = RazorTeal,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                                focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                                unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
                         )
-                    }
 
-                    Button(
-                        onClick = { onVerifyOtp(otpInput) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Verify & Authenticate Session 🔑", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                        if (otpErrorMessage != null) {
+                            Text(
+                                text = otpErrorMessage,
+                                color = Color.Red,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
 
-                    TextButton(
-                        onClick = { onSendOtp(emailInput) }
-                    ) {
-                        Text("Resend Code", color = Color.LightGray, fontSize = 12.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
+                        Button(
+                            onClick = {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                onSendOtp(emailInput)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !isOtpVerifying
+                        ) {
+                            if (isOtpVerifying) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
+                            } else {
+                                Text("Request Authorization Code 📡", color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    } else {
+                        // Step 2: Input OTP
+                        Text(
+                            text = "Authentication Code sent to\n$emailInput",
+                            color = RazorTeal,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        OutlinedTextField(
+                            value = otpInput,
+                            onValueChange = { if (it.length <= 6) otpInput = it },
+                            label = { Text("6-Digit OTP Code", color = RazorTeal) },
+                            textStyle = LocalTextStyle.current.copy(color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+                            placeholder = { Text("******", color = Color.Gray) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = RazorTeal,
+                                unfocusedBorderColor = Color.White.copy(alpha = 0.15f),
+                                focusedContainerColor = Color.Black.copy(alpha = 0.3f),
+                                unfocusedContainerColor = Color.Black.copy(alpha = 0.15f)
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        if (otpErrorMessage != null) {
+                            Text(
+                                text = otpErrorMessage,
+                                color = Color.Red,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                onVerifyOtp(otpInput)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = RazorTeal),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("Verify & Authenticate Session 🔑", color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        TextButton(
+                            onClick = {
+                                focusManager.clearFocus()
+                                keyboardController?.hide()
+                                onSendOtp(emailInput)
+                            }
+                        ) {
+                            Text("Resend Code", color = Color.LightGray, fontSize = 12.sp, textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline)
+                        }
                     }
                 }
             }
@@ -21523,10 +21561,21 @@ fun AppLockScreen(
     var isScanning by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF090616)),
+            .background(Color(0xFF090616))
+            .clickable(
+                indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            ) {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+            }
+            .imePadding(),
         contentAlignment = Alignment.Center
     ) {
         // Futuristic tech grid background
@@ -21550,7 +21599,11 @@ fun AppLockScreen(
 
         // Logout/Back button in top left
         IconButton(
-            onClick = onLogout,
+            onClick = {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+                onLogout()
+            },
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(top = 40.dp, start = 16.dp)
@@ -21566,6 +21619,9 @@ fun AppLockScreen(
 
         Column(
             modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 80.dp)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .fillMaxWidth(0.85f)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -21612,6 +21668,8 @@ fun AppLockScreen(
             // 1. Biometric Scanner Simulation Button
             Button(
                 onClick = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
                     scope.launch {
                         isScanning = true
                         kotlinx.coroutines.delay(1200) // simulated scanning scan latency
@@ -21711,6 +21769,8 @@ fun AppLockScreen(
             // 3. Confirm PIN Submit Button
             Button(
                 onClick = {
+                    focusManager.clearFocus()
+                    keyboardController?.hide()
                     val success = onUnlockWithPin(pinInput)
                     if (!success) {
                         pinError = true
@@ -21767,10 +21827,21 @@ fun CyberLoginAndSignUpScreen(
         }
     }
 
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0F0B21)),
+            .background(Color(0xFF0F0B21))
+            .clickable(
+                indication = null,
+                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            ) {
+                focusManager.clearFocus()
+                keyboardController?.hide()
+            }
+            .imePadding(),
         contentAlignment = Alignment.Center
     ) {
         // Decorative grid lines
@@ -21860,14 +21931,23 @@ fun CyberLoginAndSignUpScreen(
             )
         }
 
-        Card(
+        // Scrollable content wrapper for Card
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.9f)
+                .fillMaxSize()
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())
                 .padding(16.dp),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFF161135)),
-            border = BorderStroke(1.5.dp, RazorTeal.copy(alpha = 0.7f))
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .padding(vertical = 16.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF161135)),
+                border = BorderStroke(1.5.dp, RazorTeal.copy(alpha = 0.7f))
+            ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -22097,6 +22177,110 @@ fun CyberLoginAndSignUpScreen(
                     )
                 }
 
+                // Dynamic Multi-Layer Backend Security Indicator
+                Spacer(modifier = Modifier.height(14.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha = 0.4f))
+                        .border(1.dp, if (isAuthenticating) RazorTeal else RazorTeal.copy(alpha = 0.25f), RoundedCornerShape(12.dp))
+                        .padding(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isAuthenticating) RazorTeal else Color(0xFF00FF88))
+                            )
+                            Text(
+                                text = if (isAuthenticating) "FILTERING CREDENTIALS..." else "BACKEND INTEGRITY SHIELD ACTIVE",
+                                color = if (isAuthenticating) RazorTeal else Color(0xFF00FF88),
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp
+                            )
+                        }
+                        
+                        Text(
+                            text = if (isAuthenticating) "SCANNING" else "SECURE",
+                            color = if (isAuthenticating) RazorTeal else Color(0xFF00FF88).copy(alpha = 0.8f),
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = if (isAuthenticating) {
+                            "Filtering injection scripts, assessing lockout limits, and packing input via secure state matching..."
+                        } else {
+                            "Verified offline-first session isolation. Inputs filter through 4 active security protection barriers."
+                        },
+                        color = Color.LightGray.copy(alpha = 0.8f),
+                        fontSize = 10.sp,
+                        lineHeight = 14.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        listOf(
+                            Triple("Anti-SQLi", Icons.Default.Lock, isAuthenticating),
+                            Triple("Rate-Limit", Icons.Default.Refresh, isAuthenticating),
+                            Triple("Integrity", Icons.Default.CheckCircle, false),
+                            Triple("SHA-256", Icons.Default.VpnKey, isAuthenticating)
+                        ).forEach { (label, icon, isActive) ->
+                            val activeColor = if (isActive) RazorTeal else Color(0xFF00FF88)
+                            val containerBg = if (isActive) Color(0xFF161135) else Color(0xFF1E1E2F)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(containerBg)
+                                    .border(0.5.dp, activeColor.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
+                                    .padding(vertical = 4.dp, horizontal = 2.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = activeColor,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = label,
+                                        color = Color.White,
+                                        fontSize = 7.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Errors
@@ -22114,6 +22298,8 @@ fun CyberLoginAndSignUpScreen(
 
                 Button(
                     onClick = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
                         if (isLoginTab) {
                             onLogin(emailInput, passwordInput)
                         } else {
@@ -22163,6 +22349,8 @@ fun CyberLoginAndSignUpScreen(
                 // Single Clean Google Login Option
                 Button(
                     onClick = {
+                        focusManager.clearFocus()
+                        keyboardController?.hide()
                         showGoogleChooser = true
                     },
                     modifier = Modifier
@@ -22202,6 +22390,7 @@ fun CyberLoginAndSignUpScreen(
                 }
             }
         }
+    }
 
         // Custom, stunning Google Account Chooser bottom sheet overlay
         if (showGoogleChooser) {

@@ -21,6 +21,7 @@ import com.example.ui.theme.SocialHubTheme
 class MainActivity : ComponentActivity() {
   private val viewModel: SocialHubViewModel by viewModels()
   private lateinit var auth: com.google.firebase.auth.FirebaseAuth
+  private var authStateListener: com.google.firebase.auth.FirebaseAuth.AuthStateListener? = null
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -30,13 +31,11 @@ class MainActivity : ComponentActivity() {
     auth = com.google.firebase.auth.FirebaseAuth.getInstance()
 
     // Set up the safety listener to counter auth latency
-    auth.addAuthStateListener { firebaseAuth ->
+    authStateListener = com.google.firebase.auth.FirebaseAuth.AuthStateListener { firebaseAuth ->
       val currentUser = firebaseAuth.currentUser
       if (currentUser != null) {
         // User is securely logged in! Sync state with viewmodel
         viewModel.onFirebaseUserDetected(currentUser)
-      } else {
-        // No active session found. Handled safely inside Jetpack Compose
       }
     }
 
@@ -46,5 +45,15 @@ class MainActivity : ComponentActivity() {
         SocialHubApp(viewModel)
       }
     }
+  }
+
+  override fun onStart() {
+    super.onStart()
+    authStateListener?.let { auth.addAuthStateListener(it) }
+  }
+
+  override fun onStop() {
+    super.onStop()
+    authStateListener?.let { auth.removeAuthStateListener(it) }
   }
 }
